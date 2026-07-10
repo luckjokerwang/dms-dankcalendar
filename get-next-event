@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -eu
+
+DAYS="${1:-1}"
+NOW_WINDOW_MIN="${2:-5}"
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+NOW_EPOCH=$(date -u +%s)
+NOW_WINDOW_SEC=$((NOW_WINDOW_MIN * 60))
+FROM=$(date -u -d "-${NOW_WINDOW_MIN} minutes" +%Y-%m-%dT%H:%M:%SZ)
+TO=$(date -u -d "+${DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+
+output=$(dcal ipc events.list from="${FROM}" to="${TO}" 2>/dev/null) || {
+    echo "EVENT_SUMMARY="
+    echo "EVENT_START="
+    echo "EVENT_END="
+    exit 0
+}
+
+IFS=$'\t' read -r summary start end < <(echo "$output" | jq -r --argjson now "$NOW_EPOCH" --argjson nw "$NOW_WINDOW_SEC" '
+    [.events[] | select(
+        (.start | fromdateiso8601) > $now or
+        ($nw > 0 and
+            ((.start | fromdateiso8601) as $s |
+             ((.end // .start) | fromdateiso8601) as $e |
+             ([$e - $s, $nw] | min) as $window |
+             $now < ($s + $window))
+        )
+    )] | sort_by(.start) | first // empty |
+    "\(.summary)\t\(.start)\t\(.end // "")"
+' 2>/dev/null) || { summary=""; start=""; end=""; }
+
+echo "EVENT_SUMMARY=${summary}"
+echo "EVENT_START=${start}"
+echo "EVENT_END=${end}"

@@ -1,0 +1,22 @@
+{
+  "id": "dankCalendar",
+  "name": "Dank Calendar",
+  "description": "Next-event countdown for dcal: left click lists today's events, click one to open it, right click refreshes, middle click opens the calendar",
+  "version": "1.0.0",
+  "author": "arqueon",
+  "icon": "calendar_today",
+  "type": "widget",
+  "capabilities": [
+    "dankbar-widget"
+  ],
+  "component": "./DankCalendarWidget.qml",
+  "settings": "./DankCalendarSettings.qml",
+  "requires": [
+    "dcal",
+    "jq"
+  ],
+  "permissions": [
+    "settings_read",
+    "settings_write"
+  ]
+}
