@@ -74,7 +74,7 @@ PluginSettings {
         settingKey: "agendaPastDays"
         label: "Agenda: Days Back"
         description: "How many past days the popout agenda keeps scrollable (it opens at today)"
-        defaultValue: 14
+        defaultValue: 7
         minimum: 0
         maximum: 90
         unit: "days"
@@ -85,7 +85,7 @@ PluginSettings {
         settingKey: "agendaFutureDays"
         label: "Agenda: Days Ahead"
         description: "How many upcoming days the popout agenda covers"
-        defaultValue: 45
+        defaultValue: 30
         minimum: 7
         maximum: 90
         unit: "days"

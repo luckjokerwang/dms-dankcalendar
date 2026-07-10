@@ -50,8 +50,8 @@ PluginComponent {
     property color timeColor: isNow ? "#66BB6A" : Theme.surfaceText
     property string scriptPath: PluginService.pluginDirectory + "/dankCalendar/get-next-event"
     property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendar/get-agenda-events"
-    property int agendaPastDays: pluginData.agendaPastDays ?? 14
-    property int agendaFutureDays: pluginData.agendaFutureDays || 45
+    property int agendaPastDays: pluginData.agendaPastDays ?? 7
+    property int agendaFutureDays: pluginData.agendaFutureDays || 30
     property var agendaEvents: []
     property var agendaModel: []
     property int agendaContentHeight: 0
@@ -807,12 +807,13 @@ PluginComponent {
 
                     }
 
-                    HoverHandler {
+                    // MouseArea, not TapHandler: a default-policy TapHandler
+                    // only takes a passive grab, so the tap would also fire
+                    // the event row underneath (which opens DankCalendar).
+                    MouseArea {
+                        anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                    }
-
-                    TapHandler {
-                        onTapped: {
+                        onClicked: {
                             todayJumpAnim.to = agendaFlick.todayY;
                             todayJumpAnim.restart();
                         }

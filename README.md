@@ -22,7 +22,7 @@ events dimmed, and a floating **Today** chip to jump back when you scroll away.
 | Middle click | Toggles the DankCalendar window |
 | Hover | Tooltip with the full next-event summary |
 
-The agenda covers a configurable window (default 14 days back, 45 ahead), grouped by
+The agenda covers a configurable window (default 7 days back, 30 ahead), grouped by
 day with shaded headers — today tinted, happening-now events in green, past events
 dimmed — and a divider each time the week changes. It always opens scrolled to today.
 
@@ -58,8 +58,8 @@ to a DankBar section.
 - **Hover Tooltip** — toggle the next-event hover tooltip
 - **Event Name Width** — max pill width for the event name
 - **Now Duration** — how long to show "Now" after an event starts
-- **Agenda: Days Back** — past days kept scrollable in the popout (0–90)
-- **Agenda: Days Ahead** — upcoming days the popout covers (7–90)
+- **Agenda: Days Back** — past days kept scrollable in the popout (0–90, default 7)
+- **Agenda: Days Ahead** — upcoming days the popout covers (7–90, default 30)
 - **Look Ahead** — how many days ahead the countdown searches
 
 ## License

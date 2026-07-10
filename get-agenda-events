@@ -7,8 +7,8 @@
 # events" state.
 set -eu
 
-PAST_DAYS="${1:-14}"
-FUTURE_DAYS="${2:-45}"
+PAST_DAYS="${1:-7}"
+FUTURE_DAYS="${2:-30}"
 
 TODAY=$(date +%F)
 START_DAY=$(date -d "${TODAY} -${PAST_DAYS} days" +%F)
