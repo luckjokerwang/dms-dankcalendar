@@ -49,9 +49,24 @@ PluginComponent {
     property string timeText: formatTimeRemaining()
     property color timeColor: isNow ? "#66BB6A" : Theme.surfaceText
     property string scriptPath: PluginService.pluginDirectory + "/dankCalendar/get-next-event"
-    property string todayScriptPath: PluginService.pluginDirectory + "/dankCalendar/get-today-events"
-    property var todayEvents: []
-    property bool todayLoading: true
+    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendar/get-agenda-events"
+    property int agendaPastDays: pluginData.agendaPastDays ?? 14
+    property int agendaFutureDays: pluginData.agendaFutureDays || 45
+    property var agendaEvents: []
+    property var agendaModel: []
+    property int agendaContentHeight: 0
+    property int agendaTodayOffset: 0
+    property bool agendaLoading: true
+    readonly property int upcomingCount: {
+        var n = 0;
+        for (var i = 0; i < agendaEvents.length; i++) {
+            var ev = agendaEvents[i];
+            if (new Date(ev.end || ev.start).getTime() >= countdownNow)
+                n++;
+
+        }
+        return n;
+    }
 
     // Left click opens the popout (automatic when popoutContent is set);
     // right click re-fetches both the countdown and today's list; middle
@@ -120,13 +135,75 @@ PluginComponent {
 
     function refreshAll() {
         root.isLoading = true;
-        root.todayLoading = true;
+        root.agendaLoading = true;
         if (!fetchProcess.running)
             fetchProcess.running = true;
 
-        if (!todayProcess.running)
-            todayProcess.running = true;
+        if (!agendaProcess.running)
+            agendaProcess.running = true;
 
+    }
+
+    function dateKey(d) {
+        return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    }
+
+    // Flattens the sorted events into display rows: a "week" divider when
+    // the week (Monday-keyed) changes, a shaded "day" header per date,
+    // then that day's events. Row heights are fixed per kind so the total
+    // is known up front — the popout is sized before it opens, which keeps
+    // DankPopout's screen-edge clamping correct — and the offset of the
+    // first day >= today is recorded so the list opens scrolled to it.
+    function buildAgenda(events) {
+        var rows = [];
+        var height = 0;
+        var todayOffset = -1;
+        var today = new Date();
+        var todayKey = dateKey(today);
+        var tomorrowKey = dateKey(new Date(today.getTime() + 86400000));
+        var lastDayKey = -1;
+        var lastWeekKey = -1;
+        for (var i = 0; i < events.length; i++) {
+            var d = new Date(events[i].start);
+            var k = dateKey(d);
+            if (k !== lastDayKey) {
+                if (todayOffset < 0 && k >= todayKey)
+                    todayOffset = height;
+
+                var monday = new Date(d);
+                monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+                var wk = dateKey(monday);
+                if (lastWeekKey !== -1 && wk !== lastWeekKey) {
+                    rows.push({
+                        "kind": "week",
+                        "label": "Week of " + Qt.formatDate(monday, "d MMMM")
+                    });
+                    height += 30;
+                }
+                lastWeekKey = wk;
+                var label = Qt.formatDate(d, "dddd d MMMM");
+                if (k === todayKey)
+                    label = "Today · " + label;
+                else if (k === tomorrowKey)
+                    label = "Tomorrow · " + label;
+                rows.push({
+                    "kind": "day",
+                    "label": label,
+                    "isToday": k === todayKey
+                });
+                height += 34;
+                lastDayKey = k;
+            }
+            rows.push({
+                "kind": "event",
+                "ev": events[i]
+            });
+            height += 54;
+        }
+        root.agendaContentHeight = height;
+        // All events in the past: rest at the bottom (most recent).
+        root.agendaTodayOffset = todayOffset < 0 ? height : todayOffset;
+        return rows;
     }
 
     function eventTimeLabel(ev) {
@@ -176,12 +253,12 @@ PluginComponent {
     }
 
     Process {
-        id: todayProcess
+        id: agendaProcess
 
-        command: ["bash", root.todayScriptPath]
+        command: ["bash", root.agendaScriptPath, String(root.agendaPastDays), String(root.agendaFutureDays)]
         running: false
         onExited: (exitCode, exitStatus) => {
-            root.todayLoading = false;
+            root.agendaLoading = false;
         }
 
         stdout: StdioCollector {
@@ -190,15 +267,21 @@ PluginComponent {
                 try {
                     events = JSON.parse(text).events || [];
                 } catch (e) {
-                    console.warn("[dankCalendar] today-events parse failed:", e);
+                    console.warn("[dankCalendar] agenda parse failed:", e);
                 }
                 events.sort((a, b) => {
+                    var dayA = root.dateKey(new Date(a.start));
+                    var dayB = root.dateKey(new Date(b.start));
+                    if (dayA !== dayB)
+                        return dayA - dayB;
+
                     if ((a.allDay === true) !== (b.allDay === true))
                         return a.allDay ? -1 : 1;
 
                     return new Date(a.start) - new Date(b.start);
                 });
-                root.todayEvents = events;
+                root.agendaEvents = events;
+                root.agendaModel = root.buildAgenda(events);
             }
         }
 
@@ -219,8 +302,8 @@ PluginComponent {
             if (!fetchProcess.running)
                 fetchProcess.running = true;
 
-            if (!todayProcess.running)
-                todayProcess.running = true;
+            if (!agendaProcess.running)
+                agendaProcess.running = true;
 
         }
     }
@@ -402,8 +485,8 @@ PluginComponent {
 
     }
 
-    popoutWidth: 420
-    popoutHeight: 500
+    popoutWidth: 440
+    popoutHeight: 560
     popoutContent: Component {
         PopoutComponent {
             id: popout
@@ -428,7 +511,13 @@ PluginComponent {
                     }
 
                     StyledText {
-                        text: Qt.formatDate(new Date(), "dddd, d MMMM") + (root.todayEvents.length > 0 ? "  ·  " + root.todayEvents.length + (root.todayEvents.length === 1 ? " event" : " events") : "")
+                        text: {
+                            var date = Qt.formatDate(new Date(), "dddd, d MMMM");
+                            if (root.upcomingCount === 0)
+                                return date;
+
+                            return date + "  ·  " + root.upcomingCount + " upcoming";
+                        }
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceVariantText
                     }
@@ -458,7 +547,7 @@ PluginComponent {
 
                     DankActionButton {
                         iconName: "sync"
-                        iconColor: root.todayLoading ? Theme.primary : Theme.surfaceText
+                        iconColor: root.agendaLoading ? Theme.primary : Theme.surfaceText
                         onClicked: root.refreshAll()
                     }
 
@@ -478,105 +567,191 @@ PluginComponent {
             Item {
                 width: parent.width
                 // The list scrolls inside a fixed viewport when it grows
-                // beyond the popout.
-                readonly property real maxListHeight: 410
+                // beyond the popout. agendaContentHeight is computed with
+                // the model (fixed per-kind row heights), so the popout has
+                // its final size before DankPopout positions it.
+                readonly property real maxListHeight: 470
 
-                implicitHeight: Math.min(eventColumn.implicitHeight + Theme.spacingM * 2, maxListHeight)
+                implicitHeight: Math.max(40, Math.min(root.agendaContentHeight + Theme.spacingM * 2, maxListHeight))
 
                 DankFlickable {
+                    id: agendaFlick
+
                     anchors.fill: parent
                     anchors.margins: Theme.spacingS
                     contentHeight: eventColumn.implicitHeight
                     clip: true
 
+                    // Open the list scrolled to today, not to the oldest
+                    // past day. The content height settles over a few
+                    // layout passes as delegates instantiate, so keep
+                    // pinning until the user scrolls on their own.
+                    property bool userScrolled: false
+
+                    function pinToToday() {
+                        if (!userScrolled)
+                            contentY = Math.max(0, Math.min(root.agendaTodayOffset, contentHeight - height));
+
+                    }
+
+                    onMovementStarted: userScrolled = true
+                    onContentHeightChanged: pinToToday()
+                    Component.onCompleted: pinToToday()
+
                     Column {
                         id: eventColumn
 
-                        width: parent.width
+                        width: agendaFlick.width
                         spacing: 2
 
                         StyledText {
-                            visible: root.todayEvents.length === 0
+                            visible: root.agendaModel.length === 0
                             width: parent.width
-                            text: root.todayLoading ? "Loading events…" : "No events today."
+                            text: root.agendaLoading ? "Loading events…" : "No events in this range."
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceVariantText
                         }
 
                         Repeater {
-                            model: root.todayEvents
+                            model: root.agendaModel
 
-                            delegate: Rectangle {
-                                id: eventRow
+                            delegate: Item {
+                                id: agendaRow
 
                                 required property var modelData
-                                readonly property string phase: root.eventPhase(modelData)
+                                readonly property string phase: modelData.kind === "event" ? root.eventPhase(modelData.ev) : ""
 
                                 width: eventColumn.width
-                                height: 52
-                                radius: Theme.cornerRadiusSmall
-                                color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+                                height: modelData.kind === "event" ? 52 : (modelData.kind === "day" ? 32 : 28)
 
-                                HoverHandler {
-                                    id: rowHover
-
-                                    cursorShape: Qt.PointingHandCursor
-                                }
-
+                                // Week divider: small label + hairline.
                                 Row {
+                                    visible: agendaRow.modelData.kind === "week"
                                     anchors.left: parent.left
                                     anchors.right: parent.right
-                                    anchors.leftMargin: Theme.spacingS
-                                    anchors.rightMargin: Theme.spacingS
+                                    anchors.leftMargin: Theme.spacingXS
+                                    anchors.rightMargin: Theme.spacingXS
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: Theme.spacingS
 
-                                    Rectangle {
-                                        width: 4
-                                        height: 34
-                                        radius: 2
-                                        color: eventRow.phase === "now" ? "#66BB6A" : (eventRow.phase === "past" ? Theme.surfaceVariantText : Theme.primary)
-                                        opacity: eventRow.phase === "past" ? 0.4 : 1
+                                    StyledText {
+                                        id: weekLabel
+
+                                        text: agendaRow.modelData.kind === "week" ? agendaRow.modelData.label : ""
+                                        font.pixelSize: Math.max(9, Math.round(Theme.fontSizeSmall * 0.85))
+                                        font.weight: Font.Medium
+                                        color: Theme.surfaceVariantText
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
 
-                                    Column {
-                                        width: parent.width - 4 - Theme.spacingS * 2
-                                        spacing: 1
+                                    Rectangle {
+                                        width: parent.width - weekLabel.implicitWidth - Theme.spacingS * 2
+                                        height: 1
+                                        color: Theme.withAlpha(Theme.outline, 0.3)
                                         anchors.verticalCenter: parent.verticalCenter
-
-                                        StyledText {
-                                            width: parent.width
-                                            text: eventRow.modelData.summary || "(untitled)"
-                                            font.pixelSize: Theme.fontSizeSmall
-                                            font.weight: eventRow.phase === "past" ? Font.Normal : Font.Medium
-                                            color: eventRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 1
-                                        }
-
-                                        StyledText {
-                                            width: parent.width
-                                            text: root.eventTimeLabel(eventRow.modelData) + (eventRow.phase === "now" ? "  ·  Now" : "") + (eventRow.modelData.location ? "  ·  " + eventRow.modelData.location : "")
-                                            font.pixelSize: Theme.fontSizeSmall
-                                            color: eventRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 1
-                                        }
-
                                     }
 
                                 }
 
-                                // Click on the row → open the event's details
+                                // Day header: shaded band, today tinted primary.
+                                Rectangle {
+                                    visible: agendaRow.modelData.kind === "day"
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: 26
+                                    radius: Theme.cornerRadiusSmall
+                                    color: agendaRow.modelData.isToday ? Theme.withAlpha(Theme.primary, 0.16) : Theme.surfaceContainerHigh
+
+                                    StyledText {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: Theme.spacingS
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: agendaRow.modelData.kind === "day" ? agendaRow.modelData.label : ""
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.weight: Font.Medium
+                                        color: agendaRow.modelData.isToday ? Theme.primary : Theme.surfaceText
+                                    }
+
+                                }
+
+                                // Event row: click opens the event's details
                                 // window in DankCalendar.
-                                TapHandler {
-                                    onTapped: {
-                                        root.openEvent(eventRow.modelData);
-                                        if (popout.closePopout)
-                                            popout.closePopout();
+                                Rectangle {
+                                    id: eventRect
+
+                                    visible: agendaRow.modelData.kind === "event"
+                                    anchors.fill: parent
+                                    radius: Theme.cornerRadiusSmall
+                                    color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+
+                                    HoverHandler {
+                                        id: rowHover
+
+                                        enabled: eventRect.visible
+                                        cursorShape: Qt.PointingHandCursor
+                                    }
+
+                                    Row {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: Theme.spacingS
+                                        anchors.rightMargin: Theme.spacingS
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: Theme.spacingS
+
+                                        Rectangle {
+                                            width: 4
+                                            height: 34
+                                            radius: 2
+                                            color: agendaRow.phase === "now" ? "#66BB6A" : (agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.primary)
+                                            opacity: agendaRow.phase === "past" ? 0.4 : 1
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+
+                                        Column {
+                                            width: parent.width - 4 - Theme.spacingS * 2
+                                            spacing: 1
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            StyledText {
+                                                width: parent.width
+                                                text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.summary || "(untitled)") : ""
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
+                                                color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 1
+                                            }
+
+                                            StyledText {
+                                                width: parent.width
+                                                text: {
+                                                    if (agendaRow.modelData.kind !== "event")
+                                                        return "";
+
+                                                    var ev = agendaRow.modelData.ev;
+                                                    return root.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
+                                                }
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                color: agendaRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 1
+                                            }
+
+                                        }
 
                                     }
+
+                                    TapHandler {
+                                        onTapped: {
+                                            root.openEvent(agendaRow.modelData.ev);
+                                            if (popout.closePopout)
+                                                popout.closePopout();
+
+                                        }
+                                    }
+
                                 }
 
                             }

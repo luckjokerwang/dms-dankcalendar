@@ -71,6 +71,28 @@ PluginSettings {
     }
 
     SliderSetting {
+        settingKey: "agendaPastDays"
+        label: "Agenda: Days Back"
+        description: "How many past days the popout agenda keeps scrollable (it opens at today)"
+        defaultValue: 14
+        minimum: 0
+        maximum: 90
+        unit: "days"
+        leftIcon: "history"
+    }
+
+    SliderSetting {
+        settingKey: "agendaFutureDays"
+        label: "Agenda: Days Ahead"
+        description: "How many upcoming days the popout agenda covers"
+        defaultValue: 45
+        minimum: 7
+        maximum: 90
+        unit: "days"
+        leftIcon: "view_agenda"
+    }
+
+    SliderSetting {
         settingKey: "lookAheadDays"
         label: "Look Ahead"
         description: "How many days ahead to check for events"
