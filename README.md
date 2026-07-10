@@ -9,6 +9,9 @@ model of [dms-dankmail](https://github.com/arqueon/dms-dankmail).
 
 ![Screenshot](assets/screenshot.png)
 
+The agenda popout: shaded day headers, today tinted, happening-now events in green, past
+events dimmed, and a floating **Today** chip to jump back when you scroll away.
+
 ## Behavior
 
 | Action | Result |
@@ -26,6 +29,9 @@ dimmed — and a divider each time the week changes. It always opens scrolled to
 The bar pill keeps everything from upstream dms-dcal: scrolling event name, dot
 separator, live countdown ("2h30m", "Now" while an event is starting), compact
 vertical-bar layout, and the hover tooltip.
+
+<img src="assets/screenshot-bar.png" width="420" alt="Pill in a vertical bar with the agenda popout">
+
 
 ## Requirements
 

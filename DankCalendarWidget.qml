@@ -587,16 +587,26 @@ PluginComponent {
                     // layout passes as delegates instantiate, so keep
                     // pinning until the user scrolls on their own.
                     property bool userScrolled: false
+                    readonly property real todayY: Math.max(0, Math.min(root.agendaTodayOffset, contentHeight - height))
 
                     function pinToToday() {
                         if (!userScrolled)
-                            contentY = Math.max(0, Math.min(root.agendaTodayOffset, contentHeight - height));
+                            contentY = todayY;
 
                     }
 
                     onMovementStarted: userScrolled = true
                     onContentHeightChanged: pinToToday()
                     Component.onCompleted: pinToToday()
+
+                    NumberAnimation {
+                        id: todayJumpAnim
+
+                        target: agendaFlick
+                        property: "contentY"
+                        duration: 250
+                        easing.type: Easing.OutCubic
+                    }
 
                     Column {
                         id: eventColumn
@@ -758,6 +768,54 @@ PluginComponent {
 
                         }
 
+                    }
+
+                }
+
+                // Floating "Today" chip: appears when the list is scrolled
+                // away from today and jumps back to it.
+                Rectangle {
+                    visible: !todayJumpAnim.running && Math.abs(agendaFlick.contentY - agendaFlick.todayY) > 120
+                    width: todayChipRow.implicitWidth + Theme.spacingM * 2
+                    height: 28
+                    radius: 14
+                    color: Theme.primary
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: Theme.spacingM
+
+                    Row {
+                        id: todayChipRow
+
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXS
+
+                        DankIcon {
+                            name: agendaFlick.contentY > agendaFlick.todayY ? "arrow_upward" : "arrow_downward"
+                            size: Theme.iconSizeSmall
+                            color: Theme.primaryText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: "Today"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: Theme.primaryText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                    }
+
+                    HoverHandler {
+                        cursorShape: Qt.PointingHandCursor
+                    }
+
+                    TapHandler {
+                        onTapped: {
+                            todayJumpAnim.to = agendaFlick.todayY;
+                            todayJumpAnim.restart();
+                        }
                     }
 
                 }
