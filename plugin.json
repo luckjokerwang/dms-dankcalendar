@@ -1,6 +1,6 @@
 {
   "id": "dankCalendar",
-  "name": "Dank Calendar",
+  "name": "Dank Calendar Agenda",
   "description": "Next-event countdown for dcal: left click lists today's events, click one to open it, right click refreshes, middle click opens the calendar",
   "version": "1.0.0",
   "author": "arqueon",

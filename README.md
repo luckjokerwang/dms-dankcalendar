@@ -33,8 +33,8 @@ git clone https://github.com/arqueon/dms-dankcalendar \
   ~/.config/DankMaterialShell/plugins/dankCalendar
 ```
 
-Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar**, and add it to a
-DankBar section.
+Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar Agenda**, and add it
+to a DankBar section.
 
 > The install directory must be named `dankCalendar` — the widget resolves its helper
 > scripts through that path.

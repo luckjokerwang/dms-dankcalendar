@@ -9,7 +9,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Dank Calendar"
+        text: "Dank Calendar Agenda"
         font.pixelSize: Theme.fontSizeLarge
         font.weight: Font.Medium
         color: Theme.surfaceText
