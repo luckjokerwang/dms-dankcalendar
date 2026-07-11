@@ -134,9 +134,10 @@ PluginComponent {
     }
 
     function newEvent() {
-        // dcal exposes no ui.newEvent over IPC; day view is where a click on
-        // a time slot creates an event, so land the user there.
-        Quickshell.execDetached(["dcal", "ipc", "ui.show", "view=day"]);
+        // ui.newEvent opens the editor directly (dcal > 0.2.2); older
+        // daemons reject the unknown method, so fall back to day view,
+        // where a click on a time slot creates an event.
+        Quickshell.execDetached(["sh", "-c", "dcal ipc ui.newEvent || exec dcal ipc ui.show view=day"]);
     }
 
     function refreshAll() {
