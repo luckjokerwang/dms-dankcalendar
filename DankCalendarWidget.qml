@@ -48,8 +48,8 @@ PluginComponent {
     property bool hasEvent: eventSummary !== ""
     property string timeText: formatTimeRemaining()
     property color timeColor: isNow ? "#66BB6A" : Theme.surfaceText
-    property string scriptPath: PluginService.pluginDirectory + "/dankCalendar/get-next-event"
-    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendar/get-agenda-events"
+    property string scriptPath: PluginService.pluginDirectory + "/dankCalendarAgenda/get-next-event"
+    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendarAgenda/get-agenda-events"
     property int agendaPastDays: pluginData.agendaPastDays ?? 7
     property int agendaFutureDays: pluginData.agendaFutureDays || 30
     property var agendaEvents: []
@@ -240,7 +240,7 @@ PluginComponent {
         command: ["bash", root.scriptPath, String(root.lookAheadDays), String(root.nowWindowMinutes)]
         running: false
         onExited: (exitCode, exitStatus) => {
-            console.log("[dankCalendar] script exited:", exitCode, "summary:", root.eventSummary, "start:", root.eventStart);
+            console.log("[dankCalendarAgenda] script exited:", exitCode, "summary:", root.eventSummary, "start:", root.eventStart);
             root.isLoading = false;
         }
 
@@ -252,7 +252,7 @@ PluginComponent {
 
         stderr: SplitParser {
             onRead: (data) => {
-                return console.warn("[dankCalendar]", data);
+                return console.warn("[dankCalendarAgenda]", data);
             }
         }
 
@@ -273,7 +273,7 @@ PluginComponent {
                 try {
                     events = JSON.parse(text).events || [];
                 } catch (e) {
-                    console.warn("[dankCalendar] agenda parse failed:", e);
+                    console.warn("[dankCalendarAgenda] agenda parse failed:", e);
                 }
                 events.sort((a, b) => {
                     var dayA = root.dateKey(new Date(a.start));
@@ -293,7 +293,7 @@ PluginComponent {
 
         stderr: SplitParser {
             onRead: (data) => {
-                return console.warn("[dankCalendar]", data);
+                return console.warn("[dankCalendarAgenda]", data);
             }
         }
 

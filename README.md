@@ -43,13 +43,13 @@ vertical-bar layout, and the hover tooltip.
 
 ```bash
 git clone https://github.com/arqueon/dms-dankcalendar \
-  ~/.config/DankMaterialShell/plugins/dankCalendar
+  ~/.config/DankMaterialShell/plugins/dankCalendarAgenda
 ```
 
 Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar Agenda**, and add it
 to a DankBar section.
 
-> The install directory must be named `dankCalendar` — the widget resolves its helper
+> The install directory must be named `dankCalendarAgenda` — the widget resolves its helper
 > scripts through that path.
 
 ## Settings

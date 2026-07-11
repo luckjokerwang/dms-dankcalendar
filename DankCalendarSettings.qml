@@ -5,7 +5,7 @@ import qs.Modules.Plugins
 
 PluginSettings {
     id: root
-    pluginId: "dankCalendar"
+    pluginId: "dankCalendarAgenda"
 
     StyledText {
         width: parent.width

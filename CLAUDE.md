@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Dank Material Shell (DMS) plugin showing the next calendar event from
 [dcal](https://github.com/AvengeMedia/dcal) with a live countdown, plus a popout listing
-today's events. Plugin ID: `dankCalendar`. Fork of
+today's events. Plugin ID: `dankCalendarAgenda`. Fork of
 [leoamaro01/dms-dcal](https://github.com/leoamaro01/dms-dcal) with the dms-dankmail click
 model: left click opens the popout, clicking an event runs `dcal ipc ui.openEvent`, right
 click refreshes, middle click runs `dcal ipc ui.toggle view=day`. Hover still shows the
@@ -16,9 +16,9 @@ next-event tooltip.
 
 No build step, tests, or linter. Pure QML + two bash helper scripts, loaded by the DMS
 plugin runtime. Test locally by symlinking the repo to
-`~/.config/DankMaterialShell/plugins/dankCalendar/` (the directory name matters — script
-paths are resolved as `PluginService.pluginDirectory + "/dankCalendar/..."`), then
-`dms ipc plugin-scan reload dankCalendar` or restart the shell.
+`~/.config/DankMaterialShell/plugins/dankCalendarAgenda/` (the directory name matters — script
+paths are resolved as `PluginService.pluginDirectory + "/dankCalendarAgenda/..."`), then
+`dms ipc plugin-scan reload dankCalendarAgenda` or restart the shell.
 
 Runtime dependencies: `dcal` (calendar daemon with IPC) and `jq`.
 
