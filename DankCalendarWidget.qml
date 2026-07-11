@@ -133,6 +133,12 @@ PluginComponent {
         Quickshell.execDetached(["dcal", "ipc", "ui.openEvent", "uid=" + ev.uid, "start=" + ev.start]);
     }
 
+    function newEvent() {
+        // dcal exposes no ui.newEvent over IPC; day view is where a click on
+        // a time slot creates an event, so land the user there.
+        Quickshell.execDetached(["dcal", "ipc", "ui.show", "view=day"]);
+    }
+
     function refreshAll() {
         root.isLoading = true;
         root.agendaLoading = true;
@@ -544,6 +550,16 @@ PluginComponent {
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spacingXS
                     anchors.verticalCenter: parent.verticalCenter
+
+                    DankActionButton {
+                        iconName: "add"
+                        onClicked: {
+                            root.newEvent();
+                            if (popout.closePopout)
+                                popout.closePopout();
+
+                        }
+                    }
 
                     DankActionButton {
                         iconName: "sync"

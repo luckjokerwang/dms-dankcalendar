@@ -1,8 +1,8 @@
 {
   "id": "dankCalendar",
   "name": "Dank Calendar Agenda",
-  "description": "Next-event countdown for dcal: left click opens a scrollable agenda grouped by day (click an event to open it), right click refreshes, middle click opens the calendar",
-  "version": "1.1.0",
+  "description": "Next-event countdown for dcal: left click opens a scrollable agenda grouped by day (click an event to open it, + creates one), right click refreshes, middle click opens the calendar",
+  "version": "1.2.0",
   "author": "arqueon",
   "icon": "calendar_today",
   "type": "widget",
@@ -11,13 +11,13 @@
   ],
   "component": "./DankCalendarWidget.qml",
   "settings": "./DankCalendarSettings.qml",
-  "requires": [
-    "dcal",
-    "jq"
-  ],
   "permissions": [
     "settings_read",
     "settings_write"
   ],
-  "screenshot": "https://raw.githubusercontent.com/arqueon/dms-dankcalendar/main/assets/screenshot.png"
+  "screenshot": "https://raw.githubusercontent.com/arqueon/dms-dankcalendar/main/assets/screenshot.png",
+  "dependencies": [
+    "dcal",
+    "jq"
+  ]
 }
