@@ -600,9 +600,10 @@ PluginComponent {
                     clip: true
 
                     // Open the list scrolled to today, not to the oldest
-                    // past day. The content height settles over a few
-                    // layout passes as delegates instantiate, so keep
-                    // pinning until the user scrolls on their own.
+                    // past day. DMS keeps popout contents warm after close,
+                    // so reset on every open instead of relying only on
+                    // Component.onCompleted. Once open, stop pinning as soon
+                    // as the user scrolls in either direction.
                     property bool userScrolled: false
                     readonly property real todayY: Math.max(0, Math.min(root.agendaTodayOffset, contentHeight - height))
 
@@ -612,9 +613,18 @@ PluginComponent {
 
                     }
 
+                    function resetToToday() {
+                        userScrolled = false;
+                        todayJumpAnim.stop();
+                        pinToToday();
+                        // The popout viewport can finish sizing one event-loop
+                        // turn after the opened signal.
+                        Qt.callLater(() => agendaFlick.pinToToday());
+                    }
+
                     onMovementStarted: userScrolled = true
-                    onContentHeightChanged: pinToToday()
-                    Component.onCompleted: pinToToday()
+                    onTodayYChanged: pinToToday()
+                    Component.onCompleted: resetToToday()
 
                     NumberAnimation {
                         id: todayJumpAnim
@@ -787,6 +797,14 @@ PluginComponent {
 
                     }
 
+                }
+
+                Connections {
+                    target: popout.parentPopout
+
+                    function onOpened() {
+                        agendaFlick.resetToToday();
+                    }
                 }
 
                 // Floating "Today" chip: appears when the list is scrolled
