@@ -19,6 +19,10 @@ PluginComponent {
     property string eventStart: ""
     property string eventEnd: ""
     property bool eventAllDay: false
+    property string eventLocation: ""
+    property string eventDescription: ""
+    property string eventMeetingUrl: ""
+    property string eventUrl: ""
     property bool isLoading: true
     property int refreshInterval: (pluginData.refreshInterval || 30) * 1000
     property int pillMaxWidth: pluginData.pillMaxWidth || 160
@@ -125,27 +129,31 @@ PluginComponent {
         return Math.max(1, totalMinutes) + "m";
     }
 
-    function parseLine(line) {
-        var idx = line.indexOf("=");
-        if (idx < 0)
-            return ;
+    function applyEventPayload(payload) {
+        eventSummary = payload.summary || "";
+        eventStart = payload.start || "";
+        eventEnd = payload.end || "";
+        eventAllDay = payload.allDay === true;
+        eventLocation = payload.location || "";
+        eventDescription = payload.description || "";
+        eventMeetingUrl = payload.meetingUrl || "";
+        eventUrl = payload.url || "";
+    }
 
-        var key = line.substring(0, idx);
-        var val = line.substring(idx + 1);
-        switch (key) {
-        case "EVENT_SUMMARY":
-            eventSummary = val;
-            break;
-        case "EVENT_START":
-            eventStart = val;
-            break;
-        case "EVENT_END":
-            eventEnd = val;
-            break;
-        case "EVENT_ALL_DAY":
-            eventAllDay = val === "true";
-            break;
-        }
+    function formatEventSchedule() {
+        if (!eventStart)
+            return "";
+
+        var start = eventDate(eventStart, eventAllDay);
+        var day = formatLocalDate(start, "dddd d MMMM");
+        if (eventAllDay)
+            return day + " · All day";
+
+        var schedule = day + " · " + Qt.formatTime(start, "HH:mm");
+        if (eventEnd)
+            schedule += "–" + Qt.formatTime(eventDate(eventEnd, false), "HH:mm");
+
+        return schedule;
     }
 
     function toggleDcal() {
@@ -294,9 +302,14 @@ PluginComponent {
             root.isLoading = false;
         }
 
-        stdout: SplitParser {
-            onRead: (data) => {
-                return root.parseLine(data.trim());
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.applyEventPayload(JSON.parse(text));
+                } catch (e) {
+                    console.warn("[dankCalendarAgenda] next-event parse failed:", e);
+                    root.applyEventPayload({});
+                }
             }
         }
 
@@ -512,8 +525,8 @@ PluginComponent {
                     y: Theme.spacingS
                     // Scale with the theme font so the tooltip stays sensible
                     // across DPI / screen sizes instead of a fixed pixel width.
-                    width: Math.round(Theme.fontSizeSmall * 18)
-                    spacing: 2
+                    width: Math.round(Theme.fontSizeSmall * 24)
+                    spacing: Theme.spacingXS
 
                     StyledText {
                         width: parent.width
@@ -526,11 +539,71 @@ PluginComponent {
 
                     StyledText {
                         width: parent.width
+                        visible: root.hasEvent && root.eventStart !== ""
+                        text: root.formatEventSchedule()
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                    }
+
+                    StyledText {
+                        width: parent.width
                         visible: root.hasEvent && root.timeText !== ""
                         text: root.isNow ? "Happening now" : ("Starts in " + root.timeText)
                         font.pixelSize: Theme.fontSizeSmall
                         color: root.timeColor
                         wrapMode: Text.WordWrap
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: Theme.spacingXS
+                        visible: root.hasEvent && root.eventLocation !== ""
+
+                        DankIcon {
+                            name: "location_on"
+                            size: Theme.iconSizeSmall
+                            color: Theme.surfaceVariantText
+                        }
+
+                        StyledText {
+                            width: parent.width - Theme.iconSizeSmall - Theme.spacingXS
+                            text: root.eventLocation
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        visible: root.hasEvent && root.eventDescription !== ""
+                        text: root.eventDescription
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: Theme.spacingXS
+                        visible: root.hasEvent && (root.eventMeetingUrl !== "" || root.eventUrl !== "")
+
+                        DankIcon {
+                            name: root.eventMeetingUrl !== "" ? "videocam" : "link"
+                            size: Theme.iconSizeSmall
+                            color: Theme.primary
+                        }
+
+                        StyledText {
+                            text: root.eventMeetingUrl !== "" ? "Meeting link available" : "Event link available"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.primary
+                        }
                     }
 
                 }

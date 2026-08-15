@@ -21,7 +21,7 @@ events dimmed, and a floating **Today** chip to jump back when you scroll away.
 | `+` in the popout header | Opens DankCalendar in day view to create an event |
 | Right click | Refreshes the countdown and the agenda |
 | Middle click | Toggles the DankCalendar window |
-| Hover | Tooltip with the full next-event summary |
+| Hover | Privacy-conscious event card with schedule, location, a short description and link availability |
 
 The agenda covers a configurable window (default 7 days back, 30 ahead), grouped by
 day with shaded headers — today tinted, happening-now events in green, past events

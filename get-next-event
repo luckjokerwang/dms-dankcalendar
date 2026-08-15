@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Emits the next upcoming event as EVENT_SUMMARY= / EVENT_START= / EVENT_END= /
-# EVENT_ALL_DAY= lines for the countdown pill.
+# Emits the next upcoming event as one compact JSON object for the countdown
+# pill and its hover card. JSON keeps descriptions and locations unambiguous
+# even when calendars contain newlines, tabs, or equals signs.
 #
 # dcal serialises all-day events as UTC midnight of the calendar date, so an
 # all-day event on 8 August arrives as "2026-08-08T00:00:00Z". Comparing that
@@ -22,10 +23,7 @@ TO=$(date -u -d "+${DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
 OFFSET_SEC=$(date +%z | awk '{ v = substr($0, 2, 2) * 3600 + substr($0, 4, 2) * 60; print (substr($0, 1, 1) == "-" ? -v : v) }')
 
 emit_empty() {
-    echo "EVENT_SUMMARY="
-    echo "EVENT_START="
-    echo "EVENT_END="
-    echo "EVENT_ALL_DAY=false"
+    printf '%s\n' '{"summary":"","start":"","end":"","allDay":false,"location":"","description":"","meetingUrl":"","url":""}'
 }
 
 output=$(dcal ipc events.list from="${FROM}" to="${TO}" 2>/dev/null) || {
@@ -33,7 +31,7 @@ output=$(dcal ipc events.list from="${FROM}" to="${TO}" 2>/dev/null) || {
     exit 0
 }
 
-IFS=$'\t' read -r summary start end allday < <(echo "$output" | jq -r \
+event=$(printf '%s\n' "$output" | jq -c \
     --argjson now "$NOW_EPOCH" \
     --argjson nw "$NOW_WINDOW_SEC" \
     --argjson off "$OFFSET_SEC" '
@@ -48,11 +46,24 @@ IFS=$'\t' read -r summary start end allday < <(echo "$output" | jq -r \
              ([$e - $s, $nw] | min) as $window |
              $now < ($s + $window))
         )
-    )] | sort_by(eff) | first // empty |
-    "\(.summary)\t\(.start)\t\(.end // "")\t\(.allDay == true)"
-' 2>/dev/null) || { summary=""; start=""; end=""; allday="false"; }
+    )] | sort_by(eff) | first // null |
+    if . == null then
+        {summary:"", start:"", end:"", allDay:false, location:"", description:"", meetingUrl:"", url:""}
+    else
+        {
+            summary: (.summary // ""),
+            start: (.start // ""),
+            end: (.end // ""),
+            allDay: (.allDay == true),
+            location: (.location // ""),
+            description: (.description // ""),
+            meetingUrl: (.meetingUrl // ""),
+            url: (.url // "")
+        }
+    end
+' 2>/dev/null) || {
+    emit_empty
+    exit 0
+}
 
-echo "EVENT_SUMMARY=${summary}"
-echo "EVENT_START=${start}"
-echo "EVENT_END=${end}"
-echo "EVENT_ALL_DAY=${allday:-false}"
+printf '%s\n' "$event"
