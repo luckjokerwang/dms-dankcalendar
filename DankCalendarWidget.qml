@@ -65,6 +65,9 @@ PluginComponent {
     property int agendaContentHeight: 0
     property int agendaTodayOffset: 0
     property bool agendaLoading: true
+    property bool isRefreshing: false
+    property bool hasSyncError: false
+    property string syncErrorMessage: ""
     readonly property int upcomingCount: {
         var n = 0;
         for (var i = 0; i < agendaEvents.length; i++) {
@@ -176,6 +179,10 @@ PluginComponent {
     }
 
     function refreshAll() {
+        if (isRefreshing)
+            return;
+
+        root.isRefreshing = true;
         root.isLoading = true;
         root.agendaLoading = true;
         Quickshell.execDetached(["dcal", "ipc", "accounts.refresh"]);
@@ -303,6 +310,10 @@ PluginComponent {
         running: false
         onExited: (exitCode, exitStatus) => {
             console.log("[dankCalendarAgenda] script exited:", exitCode, "summary:", root.eventSummary, "start:", root.eventStart);
+            if (exitCode !== 0) {
+                root.hasSyncError = true;
+                root.syncErrorMessage = "日历服务未响应";
+            }
             root.isLoading = false;
         }
 
@@ -310,6 +321,7 @@ PluginComponent {
             onStreamFinished: {
                 try {
                     root.applyEventPayload(JSON.parse(text));
+                    root.hasSyncError = false;
                 } catch (e) {
                     console.warn("[dankCalendarAgenda] next-event parse failed:", e);
                     root.applyEventPayload({});
@@ -331,6 +343,10 @@ PluginComponent {
         command: ["bash", root.agendaScriptPath, String(root.agendaPastDays), String(root.agendaFutureDays)]
         running: false
         onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                root.hasSyncError = true;
+                root.syncErrorMessage = "获取日程失败";
+            }
             root.agendaLoading = false;
         }
 
@@ -339,6 +355,7 @@ PluginComponent {
                 var events = [];
                 try {
                     events = JSON.parse(text).events || [];
+                    root.hasSyncError = false;
                 } catch (e) {
                     console.warn("[dankCalendarAgenda] agenda parse failed:", e);
                 }
@@ -383,7 +400,7 @@ PluginComponent {
 
     Timer {
         id: postSyncTimer
-        interval: 1500
+        interval: 1600
         repeat: false
         onTriggered: {
             if (!fetchProcess.running) {
@@ -395,6 +412,17 @@ PluginComponent {
                 root.agendaLoading = true;
                 agendaProcess.running = true;
             }
+
+            finishSyncTimer.restart();
+        }
+    }
+
+    Timer {
+        id: finishSyncTimer
+        interval: 600
+        repeat: false
+        onTriggered: {
+            root.isRefreshing = false;
         }
     }
 
@@ -703,10 +731,49 @@ PluginComponent {
                         }
                     }
 
-                    DankActionButton {
-                        iconName: "sync"
-                        iconColor: root.agendaLoading ? Theme.primary : Theme.surfaceText
-                        onClicked: root.refreshAll()
+                    Rectangle {
+                        id: syncBtn
+                        width: 32
+                        height: 32
+                        radius: Theme.cornerRadiusSmall
+                        color: syncMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+                        DankIcon {
+                            id: syncIcon
+                            name: root.isRefreshing ? "sync" : (root.hasSyncError ? "sync_problem" : "sync")
+                            size: Theme.iconSizeSmall
+                            color: root.isRefreshing ? Theme.primary : (root.hasSyncError ? Theme.error : (syncMouse.containsMouse ? Theme.primary : Theme.surfaceText))
+                            anchors.centerIn: parent
+                            smoothTransform: true
+                            layer.enabled: true
+                            transformOrigin: Item.Center
+
+                            RotationAnimation {
+                                id: syncAnim
+                                target: syncIcon
+                                property: "rotation"
+                                from: 0
+                                to: 360
+                                duration: 800
+                                loops: Animation.Infinite
+                                running: root.isRefreshing
+                                onRunningChanged: {
+                                    if (!running)
+                                        syncIcon.rotation = 0;
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: syncMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!root.isRefreshing)
+                                    root.refreshAll();
+                            }
+                        }
                     }
 
                     DankActionButton {
@@ -720,6 +787,56 @@ PluginComponent {
 
                 }
 
+            }
+
+            // Sync Error Banner
+            Rectangle {
+                visible: root.hasSyncError
+                width: parent.width - Theme.spacingS * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: 32
+                radius: Theme.cornerRadiusSmall
+                color: Theme.withAlpha(Theme.error, 0.15)
+                border.width: 1
+                border.color: Theme.withAlpha(Theme.error, 0.4)
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingS
+                    anchors.rightMargin: Theme.spacingS
+                    spacing: Theme.spacingS
+
+                    DankIcon {
+                        name: "error_outline"
+                        size: 16
+                        color: Theme.error
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        width: parent.width - 20 - retryText.implicitWidth - Theme.spacingS * 2
+                        text: root.syncErrorMessage || "同步失败，请检查日历服务"
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        color: Theme.error
+                        elide: Text.ElideRight
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        id: retryText
+                        text: "重试"
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        font.weight: Font.Bold
+                        color: Theme.error
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.refreshAll()
+                        }
+                    }
+                }
             }
 
             Item {
@@ -1028,10 +1145,28 @@ PluginComponent {
                 spacing: Theme.spacingXS
 
                 DankIcon {
-                    name: "calendar_today"
+                    id: hIcon
+                    name: root.isRefreshing ? "sync" : "calendar_today"
                     size: iconSize
                     color: Theme.primary
                     anchors.verticalCenter: parent.verticalCenter
+                    smoothTransform: true
+                    layer.enabled: true
+                    transformOrigin: Item.Center
+
+                    RotationAnimation {
+                        target: hIcon
+                        property: "rotation"
+                        from: 0
+                        to: 360
+                        duration: 800
+                        loops: Animation.Infinite
+                        running: root.isRefreshing
+                        onRunningChanged: {
+                            if (!running)
+                                hIcon.rotation = 0;
+                        }
+                    }
                 }
 
                 Item {
@@ -1143,10 +1278,28 @@ PluginComponent {
                 spacing: Theme.spacingXS || 4
 
                 DankIcon {
-                    name: "calendar_today"
+                    id: vIcon
+                    name: root.isRefreshing ? "sync" : "calendar_today"
                     size: iconSize
                     color: Theme.primary
                     anchors.horizontalCenter: parent.horizontalCenter
+                    smoothTransform: true
+                    layer.enabled: true
+                    transformOrigin: Item.Center
+
+                    RotationAnimation {
+                        target: vIcon
+                        property: "rotation"
+                        from: 0
+                        to: 360
+                        duration: 800
+                        loops: Animation.Infinite
+                        running: root.isRefreshing
+                        onRunningChanged: {
+                            if (!running)
+                                vIcon.rotation = 0;
+                        }
+                    }
                 }
 
                 // Compact countdown so it fits a narrow vertical bar. The event
