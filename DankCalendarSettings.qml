@@ -5,11 +5,11 @@ import qs.Modules.Plugins
 
 PluginSettings {
     id: root
-    pluginId: "dankCalendarAgendaLocal"
+    pluginId: "dankCalendarPlus"
 
     StyledText {
         width: parent.width
-        text: "Dank Calendar Extension"
+        text: "Dank Calendar Plus"
         font.pixelSize: Theme.fontSizeLarge
         font.weight: Font.Medium
         color: Theme.surfaceText

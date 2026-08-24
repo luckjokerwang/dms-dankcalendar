@@ -57,8 +57,8 @@ PluginComponent {
     property string timeText: formatTimeRemaining()
     property string compactTimeText: formatCompactTimeRemaining()
     property color timeColor: Theme.primary
-    property string scriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-next-event"
-    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-agenda-events"
+    property string scriptPath: Qt.resolvedUrl("./get-next-event").toString().replace(/^file:\/\//, "")
+    property string agendaScriptPath: Qt.resolvedUrl("./get-agenda-events").toString().replace(/^file:\/\//, "")
     property int agendaPastDays: pluginData.agendaPastDays ?? 7
     property int agendaFutureDays: pluginData.agendaFutureDays || 30
     property var agendaEvents: []
@@ -76,7 +76,7 @@ PluginComponent {
     }
     readonly property string activeModule: globalActiveModule.value || "agenda"
 
-    property string tasksScriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-tasks"
+    property string tasksScriptPath: Qt.resolvedUrl("./get-tasks").toString().replace(/^file:\/\//, "")
     property var pendingTasks: []
     property var completedTasks: []
     property int pendingTasksCount: 0

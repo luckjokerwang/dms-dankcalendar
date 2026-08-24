@@ -1,8 +1,8 @@
 {
-  "id": "dankCalendarAgendaLocal",
-  "name": "Dank Calendar Extension",
-  "description": "Next-event countdown for dcal: customizable pill display modes, text scrolling/ellipsis control, and scrollable agenda popup",
-  "version": "1.4.0-local",
+  "id": "dankCalendarPlus",
+  "name": "Dank Calendar Plus",
+  "description": "Next-event countdown & full tasks manager for dcal: dual-mode bar pill, interactive agenda & tasks popout with priority tagging and instant synchronization",
+  "version": "2.0.0",
   "author": "luckjokerwang (based on arqueon / Leonardo Amaro)",
   "icon": "calendar_today",
   "type": "widget",
@@ -19,7 +19,8 @@
   "screenshot": "https://raw.githubusercontent.com/luckjokerwang/dms-dankcalendar/main/assets/screenshot.png",
   "dependencies": [
     "dcal",
-    "jq"
+    "jq",
+    "python3"
   ]
 }
 
