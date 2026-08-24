@@ -27,6 +27,8 @@ PluginComponent {
     property int refreshInterval: (pluginData.refreshInterval || 30) * 1000
     property int pillMaxWidth: pluginData.pillMaxWidth || 160
     property bool dynamicWidth: pluginData.dynamicWidth ?? false
+    property bool scrollTitle: pluginData.scrollTitle ?? true
+    property string pillDisplayMode: pluginData.pillDisplayMode || "full"
     property int lookAheadDays: pluginData.lookAheadDays || 1
     property int nowWindowMinutes: pluginData.nowWindowMinutes ?? 5
     property bool showTooltip: pluginData.showTooltip ?? true
@@ -54,8 +56,8 @@ PluginComponent {
     property string timeText: formatTimeRemaining()
     property string compactTimeText: formatCompactTimeRemaining()
     property color timeColor: Theme.primary
-    property string scriptPath: PluginService.pluginDirectory + "/dankCalendarAgenda/get-next-event"
-    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendarAgenda/get-agenda-events"
+    property string scriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-next-event"
+    property string agendaScriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-agenda-events"
     property int agendaPastDays: pluginData.agendaPastDays ?? 7
     property int agendaFutureDays: pluginData.agendaFutureDays || 30
     property var agendaEvents: []
@@ -633,8 +635,6 @@ PluginComponent {
 
     }
 
-    popoutWidth: 440
-    popoutHeight: 560
     popoutContent: Component {
         PopoutComponent {
             id: popout
@@ -1036,6 +1036,7 @@ PluginComponent {
 
                 Item {
                     id: summaryClip
+                    visible: (root.pillDisplayMode !== "countdownOnly") || !root.hasEvent
 
                     width: root.dynamicWidth ? Math.min(summaryText.implicitWidth, root.pillMaxWidth) : root.pillMaxWidth
                     height: summaryText.implicitHeight
@@ -1047,13 +1048,17 @@ PluginComponent {
                     StyledText {
                         id: summaryText
 
+                        width: root.scrollTitle ? implicitWidth : summaryClip.width
                         text: root.hasEvent ? root.eventSummary : "No events"
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceText
+                        wrapMode: Text.NoWrap
+                        maximumLineCount: 1
+                        elide: root.scrollTitle ? Text.ElideNone : Text.ElideRight
                     }
 
                     SequentialAnimation {
-                        running: summaryClip.overflow > 0
+                        running: root.scrollTitle && summaryClip.overflow > 0 && summaryClip.visible
                         loops: Animation.Infinite
                         onRunningChanged: if (!running) summaryText.x = 0
 
@@ -1086,7 +1091,7 @@ PluginComponent {
                     font.weight: Font.Medium
                     color: root.timeColor
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: root.hasEvent
+                    visible: root.hasEvent && root.pillDisplayMode === "full"
                 }
 
                 StyledText {
@@ -1095,7 +1100,7 @@ PluginComponent {
                     font.weight: Font.Medium
                     color: root.timeColor
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: root.hasEvent
+                    visible: root.hasEvent && root.pillDisplayMode !== "titleOnly"
                 }
 
             }

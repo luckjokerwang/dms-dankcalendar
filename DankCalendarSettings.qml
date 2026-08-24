@@ -5,11 +5,11 @@ import qs.Modules.Plugins
 
 PluginSettings {
     id: root
-    pluginId: "dankCalendarAgenda"
+    pluginId: "dankCalendarAgendaLocal"
 
     StyledText {
         width: parent.width
-        text: "Dank Calendar Agenda"
+        text: "Dank Calendar Extension"
         font.pixelSize: Theme.fontSizeLarge
         font.weight: Font.Medium
         color: Theme.surfaceText
@@ -21,6 +21,34 @@ PluginSettings {
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
+    }
+
+    SelectionSetting {
+        settingKey: "pillDisplayMode"
+        label: "Pill Display Mode"
+        description: "Choose what content to display in the bar pill"
+        defaultValue: "full"
+        options: [
+            {
+                label: "Full (Title • Countdown)",
+                value: "full"
+            },
+            {
+                label: "Countdown Only",
+                value: "countdownOnly"
+            },
+            {
+                label: "Title Only",
+                value: "titleOnly"
+            }
+        ]
+    }
+
+    ToggleSetting {
+        settingKey: "scrollTitle"
+        label: "Scroll Long Titles"
+        description: "Scroll event names that exceed the widget width, or truncate with ellipsis when disabled"
+        defaultValue: true
     }
 
     SliderSetting {

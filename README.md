@@ -1,16 +1,22 @@
-# dms-dankcalendar
+# dms-dankcalendar 扩展 (Dank Calendar Extension)
 
 A [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) bar widget for
 [dcal / DankCalendar](https://github.com/AvengeMedia/dcal): your next event with a live
 countdown in the bar, and a scrollable agenda one click away.
 
-Fork of [leoamaro01/dms-dcal](https://github.com/leoamaro01/dms-dcal) with the click
-model of [dms-dankmail](https://github.com/arqueon/dms-dankmail).
+Enhanced fork maintained by **luckjokerwang**, based on `arqueon/dms-dankcalendar` and `leoamaro01/dms-dcal`.
 
 ![Screenshot](assets/screenshot.png)
 
 The agenda popout: shaded day headers, today tinted, happening-now events in green, past
 events dimmed, and a floating **Today** chip to jump back when you scroll away.
+
+## Key Features & Enhancements
+
+- **Pill Display Modes**: Full (`Title • Countdown`), `Countdown Only` (compact), or `Title Only`.
+- **Text Scrolling / Ellipsis Control**: Toggle title marquee animation or truncate with ellipsis `...` when text overflows.
+- **Manual Sync Integration**: Right click on the pill or refresh button in the popout triggers `dcal ipc accounts.refresh` with auto-reload.
+- **Interactive Agenda**: Popout with day grouping, week headers, and quick event inspection.
 
 ## Behavior
 
@@ -19,20 +25,9 @@ events dimmed, and a floating **Today** chip to jump back when you scroll away.
 | Left click | Agenda popout, opened at today |
 | Click an event in the popout | Opens that event's details in DankCalendar |
 | `+` in the popout header | Opens DankCalendar in day view to create an event |
-| Right click | Refreshes the countdown and the agenda |
+| Right click | Refreshes provider accounts and reloads countdown & agenda |
 | Middle click | Toggles the DankCalendar window |
 | Hover | Privacy-conscious event card with schedule, location, a short description and link availability |
-
-The agenda covers a configurable window (default 7 days back, 30 ahead), grouped by
-day with shaded headers — today tinted, happening-now events in green, past events
-dimmed — and a divider each time the week changes. It always opens scrolled to today.
-
-The bar pill keeps everything from upstream dms-dcal: scrolling event name, dot
-separator, live countdown ("2h30m", "Now" while an event is starting), compact
-vertical-bar layout, and the hover tooltip.
-
-<img src="assets/screenshot-bar.png" width="420" alt="Pill in a vertical bar with the agenda popout">
-
 
 ## Requirements
 
@@ -42,18 +37,17 @@ vertical-bar layout, and the hover tooltip.
 ## Install
 
 ```bash
-git clone https://github.com/arqueon/dms-dankcalendar \
-  ~/.config/DankMaterialShell/plugins/dankCalendarAgenda
+git clone https://github.com/luckjokerwang/dms-dankcalendar.git \
+  ~/.config/DankMaterialShell/plugins/dankCalendarAgendaLocal
 ```
 
-Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar Agenda**, and add it
+Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar Extension**, and add it
 to a DankBar section.
-
-> The install directory must be named `dankCalendarAgenda` — the widget resolves its helper
-> scripts through that path.
 
 ## Settings
 
+- **Pill Display Mode** — Full, Countdown Only, or Title Only
+- **Scroll Long Titles** — Toggle marquee scrolling for long event names
 - **Refresh Interval** — how often to re-fetch events (seconds)
 - **Dynamic Width** — shrink the pill to fit the event name
 - **Hover Tooltip** — toggle the next-event hover tooltip
@@ -70,6 +64,7 @@ GPL-3.0-or-later. The upstream code this plugin forks from is MIT ©
 
 ## Credits
 
+- Maintained & enhanced by [luckjokerwang](https://github.com/luckjokerwang).
+- Forked from [arqueon/dms-dankcalendar](https://github.com/arqueon/dms-dankcalendar) (GPL-3.0).
 - Original plugin by [Leonardo Amaro](https://github.com/leoamaro01) (MIT).
-- Popout/click pattern from [dms-dankmail](https://github.com/arqueon/dms-dankmail).
-- The screenshot shows fictitious demo events.
+
