@@ -1,61 +1,59 @@
 # dms-dankcalendar 扩展 (Dank Calendar Extension)
 
-A [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) bar widget for
-[dcal / DankCalendar](https://github.com/AvengeMedia/dcal): your next event with a live
-countdown in the bar, and a scrollable agenda one click away.
+A powerful, all-in-one [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) bar widget for [dcal / DankCalendar](https://github.com/AvengeMedia/dcal): seamlessly manage your **Agenda (日程)** and **Tasks (待办任务)** from your top bar.
 
 Enhanced fork maintained by **luckjokerwang**, based on `arqueon/dms-dankcalendar` and `leoamaro01/dms-dcal`.
 
 ![Screenshot](assets/screenshot.png)
 
-The agenda popout: shaded day headers, today tinted, happening-now events in green, past
-events dimmed, and a floating **Today** chip to jump back when you scroll away.
+## 🌟 Key Features & Enhancements
 
-## Key Features & Enhancements
+### 📅 Agenda & 📋 Tasks Integration (日程与待办双模式)
+- **Dual-Mode Bar Pill**: Left-click the pill icon to cycle between **Agenda Mode** and **Tasks Mode**. In Tasks mode, the pill displays your pending task count and the current task name with smooth marquee scrolling / ellipsis truncation.
+- **Unified Tabbed Popout**: Header with `timeManager`-style tabs `[ 📅 日程 ]` and `[ ✓ 待办 (N) ]` with a stable, fixed viewport (`420 x 540`) — zero jitter or sizing jump when switching.
+- **Cross-Display State Sync**: Leverages DMS `PluginGlobalVar` to synchronize mode and state across all connected monitors in real-time.
 
-- **Pill Display Modes**: Full (`Title • Countdown`), `Countdown Only` (compact), or `Title Only`.
-- **Text Scrolling / Ellipsis Control**: Toggle title marquee animation or truncate with ellipsis `...` when text overflows.
-- **Manual Sync Integration**: Right click on the pill or refresh button in the popout triggers `dcal ipc accounts.refresh` with auto-reload.
-- **Interactive Agenda**: Popout with day grouping, week headers, and quick event inspection.
+### ⚡ Tasks Management (待办全功能)
+- **0ms Instant Optimistic UI**: Check off, uncheck, or add tasks with instantaneous feedback and a robust FIFO sequential action queue to prevent race conditions or database lockups.
+- **Smart Priority Badging & Shortcuts**: Supports RFC 5545 priorities with color-coded badges (🔴 高优, 🟡 中优, 🔵 低优). Quickly set priority upon creation via shortcuts like `!1` (or `!h`), `!2` (or `!m`), `!3` (or `!l`).
+- **Multi-Calendar Filtering**: Easily switch between task lists / calendars with filter pills.
+- **Collapsible Completed Tasks**: Group finished items into an expandable `已完成 (N)` section.
+- **Stable Multi-Level Sorting**: Ordered by Priority → Due Date → Creation Date.
 
-## Behavior
+### 🎨 Visual & UX Polish
+- **360° Smooth Refresh Animation**: GPU-accelerated rotating feedback on manual refresh (`↻` or right-click).
+- **Graceful Error Feedback**: Integrated sync failure warnings with direct retry action.
+- **Customizable Sizing**: Minimum pill event width adjustable down to `40px` in settings.
+
+## 🕹️ Quick Actions
 
 | Action | Result |
 |---|---|
-| Left click | Agenda popout, opened at today |
-| Click an event in the popout | Opens that event's details in DankCalendar |
-| `+` in the popout header | Opens DankCalendar in day view to create an event |
-| Right click | Refreshes provider accounts and reloads countdown & agenda |
-| Middle click | Toggles the DankCalendar window |
-| Hover | Privacy-conscious event card with schedule, location, a short description and link availability |
+| Click Pill Icon | Cycles between **Agenda** and **Tasks** mode (synced across all monitors) |
+| Left Click Pill Body | Opens the popout window |
+| Middle Click | Toggles the full DankCalendar application window |
+| Right Click / ↻ | Triggers account sync (`dcal ipc accounts.refresh`) with rotation feedback |
+| Popout `+` Button | Opens DankCalendar in day view to create a new event |
+| Popout Quick Add Bar | Quickly creates a task (supports `!1`, `!2`, `!3` priority prefix) |
+| Click Task Checkbox | Toggles task completion state |
+| Hover on Pill | Displays detailed event card / task summary tooltip |
 
-## Requirements
+## 📦 Requirements
 
 - `dcal` (DankCalendar daemon with IPC) running
 - `jq`
+- Python 3
 
-## Install
+## ⚙️ Settings
 
-```bash
-git clone https://github.com/luckjokerwang/dms-dankcalendar.git \
-  ~/.config/DankMaterialShell/plugins/dankCalendarAgendaLocal
-```
-
-Then Settings → Plugins → Scan for Plugins, enable **Dank Calendar Extension**, and add it
-to a DankBar section.
-
-## Settings
-
-- **Pill Display Mode** — Full, Countdown Only, or Title Only
-- **Scroll Long Titles** — Toggle marquee scrolling for long event names
-- **Refresh Interval** — how often to re-fetch events (seconds)
-- **Dynamic Width** — shrink the pill to fit the event name
-- **Hover Tooltip** — toggle the next-event hover tooltip
-- **Event Name Width** — max pill width for the event name
-- **Now Duration** — how long to show "Now" after an event starts
-- **Agenda: Days Back** — past days kept scrollable in the popout (0–90, default 7)
-- **Agenda: Days Ahead** — upcoming days the popout covers (7–90, default 30)
-- **Look Ahead** — how many days ahead the countdown searches
+- **Pill Display Mode** — Full (`Title • Countdown`), Countdown Only, or Title Only
+- **Scroll Long Titles** — Toggle marquee scrolling for long event / task names
+- **Refresh Interval** — Polling interval for upcoming events (seconds)
+- **Dynamic Width** — Automatically shrink the pill to fit the text
+- **Hover Tooltip** — Toggle the hover details card
+- **Event Name Width** — Maximum pill text width (40px – 300px)
+- **Now Duration** — How long to display "Now" after an event starts
+- **Agenda: Days Back / Days Ahead** — Scope of scrollable historical / future agenda items
 
 ## License
 

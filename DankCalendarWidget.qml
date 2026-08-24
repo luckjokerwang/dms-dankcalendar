@@ -6,6 +6,7 @@ import qs.Common
 import qs.Modules.Plugins
 import qs.Services
 import qs.Widgets
+import "./components"
 
 // Next-event countdown for dcal / DankCalendar, click model borrowed from
 // dms-dankmail: left click opens a popout with today's events (click one to
@@ -65,6 +66,24 @@ PluginComponent {
     property int agendaContentHeight: 0
     property int agendaTodayOffset: 0
     property bool agendaLoading: true
+    popoutWidth: 420
+    popoutHeight: 540
+
+    PluginGlobalVar {
+        id: globalActiveModule
+        varName: "dankCalendarActiveModule"
+        defaultValue: "agenda"
+    }
+    readonly property string activeModule: globalActiveModule.value || "agenda"
+
+    property string tasksScriptPath: PluginService.pluginDirectory + "/dankCalendarAgendaLocal/get-tasks"
+    property var pendingTasks: []
+    property var completedTasks: []
+    property int pendingTasksCount: 0
+    property int completedTasksCount: 0
+    property string defaultTaskCalendarId: ""
+    property var taskCalendars: []
+    property bool tasksLoading: false
     property bool isRefreshing: false
     property bool hasSyncError: false
     property string syncErrorMessage: ""
@@ -178,6 +197,155 @@ PluginComponent {
         Quickshell.execDetached(["sh", "-c", "dcal ipc ui.newEvent || exec dcal ipc ui.show view=day"]);
     }
 
+    property var taskActionQueue: []
+    property bool isActionRunning: false
+
+    Process {
+        id: singleTaskActionProcess
+        command: []
+
+        onExited: (exitCode) => {
+            if (exitCode !== 0) {
+                console.warn("[dankCalendarAgenda] task action failed with code:", exitCode);
+            }
+            root.isActionRunning = false;
+            root.processNextTaskAction();
+        }
+    }
+
+    function processNextTaskAction() {
+        if (isActionRunning || taskActionQueue.length === 0) {
+            if (!isActionRunning && taskActionQueue.length === 0) {
+                // When ALL queued actions have finished, sync with dcal
+                root.fetchTasks();
+            }
+            return;
+        }
+
+        var nextCmd = taskActionQueue.shift();
+        isActionRunning = true;
+        singleTaskActionProcess.command = ["sh", "-c", nextCmd];
+        singleTaskActionProcess.running = true;
+    }
+
+    function queueTaskAction(cmd) {
+        taskActionQueue.push(cmd);
+        processNextTaskAction();
+    }
+
+    function cycleModule() {
+        globalActiveModule.set(activeModule === "agenda" ? "tasks" : "agenda");
+    }
+
+    function fetchTasks() {
+        if (!tasksProcess.running) {
+            root.tasksLoading = true;
+            tasksProcess.running = true;
+        }
+    }
+
+    function createTask(summary, calendarId) {
+        var cid = calendarId || defaultTaskCalendarId || (taskCalendars.length > 0 ? taskCalendars[0].id : "");
+        if (!cid) {
+            console.warn("[dankCalendarAgenda] No task calendar available");
+            return;
+        }
+        var calName = "Tasks";
+        for (var i = 0; i < taskCalendars.length; i++) {
+            if (taskCalendars[i].id === cid) {
+                calName = taskCalendars[i].name;
+                break;
+            }
+        }
+
+        // Check for priority prefix e.g. "!1", "!h", "!high" -> priority 1, "!2" / "!m" -> 5, "!3" / "!l" -> 9
+        var cleanSummary = summary.trim();
+        var priorityVal = 0;
+        var m = cleanSummary.match(/^!(1|2|3|h|m|l|high|med|low)\s+/i);
+        if (m) {
+            var tag = m[1].toLowerCase();
+            if (tag === "1" || tag === "h" || tag === "high") priorityVal = 1;
+            else if (tag === "2" || tag === "m" || tag === "med") priorityVal = 5;
+            else if (tag === "3" || tag === "l" || tag === "low") priorityVal = 9;
+            cleanSummary = cleanSummary.substring(m[0].length).trim();
+        }
+
+        // Optimistic UI Update: append to bottom (先创建的在上面, 新创建的在最下方)
+        var tempId = "temp-" + Date.now();
+        var tempTask = {
+            id: tempId,
+            summary: cleanSummary,
+            calendarId: cid,
+            calendarName: calName,
+            status: "needs_action",
+            percentComplete: 0,
+            priority: priorityVal,
+            due: null
+        };
+        var newPending = pendingTasks.concat([tempTask]);
+        pendingTasks = newPending;
+        pendingTasksCount = newPending.length;
+
+        // Background write via sequential queue
+        var escaped = cleanSummary.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var cmd = "dcal ipc tasks.create calendarId=" + cid + " summary=\"" + escaped + "\"";
+        if (priorityVal > 0) {
+            cmd += " priority=" + priorityVal;
+        }
+        queueTaskAction(cmd);
+    }
+
+    function completeTask(taskId, completed) {
+        // Optimistic UI Update: instantly move task between lists
+        if (completed) {
+            var found = null;
+            var newPending = [];
+            for (var i = 0; i < pendingTasks.length; i++) {
+                if (pendingTasks[i].id === taskId) {
+                    found = Object.assign({}, pendingTasks[i], { status: "completed", percentComplete: 100 });
+                } else {
+                    newPending.push(pendingTasks[i]);
+                }
+            }
+            if (found) {
+                pendingTasks = newPending;
+                pendingTasksCount = newPending.length;
+                completedTasks = [found].concat(completedTasks);
+                completedTasksCount = completedTasks.length;
+            }
+        } else {
+            var foundUncomp = null;
+            var newComp = [];
+            for (var j = 0; j < completedTasks.length; j++) {
+                if (completedTasks[j].id === taskId) {
+                    foundUncomp = Object.assign({}, completedTasks[j], { status: "needs_action", percentComplete: 0 });
+                } else {
+                    newComp.push(completedTasks[j]);
+                }
+            }
+            if (foundUncomp) {
+                completedTasks = newComp;
+                completedTasksCount = newComp.length;
+                pendingTasks = pendingTasks.concat([foundUncomp]);
+                pendingTasksCount = pendingTasks.length;
+            }
+        }
+
+        // Background write via sequential queue
+        queueTaskAction("dcal ipc tasks.complete id=" + taskId + " completed=" + (completed ? "true" : "false"));
+    }
+
+    function deleteTask(taskId) {
+        // Optimistic UI Update: instantly remove from both lists
+        pendingTasks = pendingTasks.filter(t => t.id !== taskId);
+        pendingTasksCount = pendingTasks.length;
+        completedTasks = completedTasks.filter(t => t.id !== taskId);
+        completedTasksCount = completedTasks.length;
+
+        // Background write via sequential queue
+        queueTaskAction("dcal ipc tasks.delete id=" + taskId);
+    }
+
     function refreshAll() {
         if (isRefreshing)
             return;
@@ -192,6 +360,7 @@ PluginComponent {
         if (!agendaProcess.running)
             agendaProcess.running = true;
 
+        fetchTasks();
         postSyncTimer.restart();
     }
 
@@ -383,6 +552,38 @@ PluginComponent {
 
     }
 
+    Process {
+        id: tasksProcess
+
+        command: ["python3", root.tasksScriptPath]
+        running: false
+        onExited: (exitCode, exitStatus) => {
+            root.tasksLoading = false;
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var data = JSON.parse(text);
+                    root.pendingTasks = data.pending || [];
+                    root.completedTasks = data.completed || [];
+                    root.pendingTasksCount = data.pendingCount || 0;
+                    root.completedTasksCount = data.completedCount || 0;
+                    root.defaultTaskCalendarId = data.defaultCalendarId || "";
+                    root.taskCalendars = data.taskCalendars || [];
+                } catch (e) {
+                    console.warn("[dankCalendarAgenda] tasks parse failed:", e);
+                }
+            }
+        }
+
+        stderr: SplitParser {
+            onRead: (data) => {
+                return console.warn("[dankCalendarAgenda tasks]", data);
+            }
+        }
+    }
+
     Timer {
         interval: root.refreshInterval
         running: true
@@ -395,6 +596,8 @@ PluginComponent {
             if (!agendaProcess.running)
                 agendaProcess.running = true;
 
+            if (!tasksProcess.running)
+                tasksProcess.running = true;
         }
     }
 
@@ -413,6 +616,11 @@ PluginComponent {
                 agendaProcess.running = true;
             }
 
+            if (!tasksProcess.running) {
+                root.tasksLoading = true;
+                tasksProcess.running = true;
+            }
+
             finishSyncTimer.restart();
         }
     }
@@ -424,6 +632,13 @@ PluginComponent {
         onTriggered: {
             root.isRefreshing = false;
         }
+    }
+
+    Timer {
+        id: postActionTimer
+        interval: 350
+        repeat: false
+        onTriggered: root.fetchTasks()
     }
 
     Timer {
@@ -667,8 +882,7 @@ PluginComponent {
         PopoutComponent {
             id: popout
 
-            // Custom header (the built-in one hides with empty headerText):
-            // the title itself opens DankCalendar, dankmail-style.
+            // 1. Original Top Header: Title + Subtitle on Left, Action Buttons on Right
             Item {
                 width: parent.width
                 height: 48
@@ -689,9 +903,13 @@ PluginComponent {
                     StyledText {
                         text: {
                             var date = root.formatLocalDate(new Date(), "dddd, d MMMM");
+                            if (root.activeModule === "tasks") {
+                                if (root.pendingTasksCount === 0)
+                                    return date + "  ·  全部完成";
+                                return date + "  ·  " + root.pendingTasksCount + " 项待办";
+                            }
                             if (root.upcomingCount === 0)
                                 return date;
-
                             return date + "  ·  " + root.upcomingCount + " upcoming";
                         }
                         font.pixelSize: Theme.fontSizeSmall
@@ -700,7 +918,6 @@ PluginComponent {
 
                     HoverHandler {
                         id: titleHover
-
                         cursorShape: Qt.PointingHandCursor
                     }
 
@@ -709,10 +926,8 @@ PluginComponent {
                             root.toggleDcal();
                             if (popout.closePopout)
                                 popout.closePopout();
-
                         }
                     }
-
                 }
 
                 Row {
@@ -727,7 +942,6 @@ PluginComponent {
                             root.newEvent();
                             if (popout.closePopout)
                                 popout.closePopout();
-
                         }
                     }
 
@@ -781,12 +995,84 @@ PluginComponent {
                         onClicked: {
                             if (popout.closePopout)
                                 popout.closePopout();
+                        }
+                    }
+                }
+            }
 
+            // 2. Tab Switcher Pills Row (TimeManager style, full width)
+            Row {
+                width: parent.width - Theme.spacingS * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Theme.spacingS
+
+                // Tab 1: 日程
+                Rectangle {
+                    width: (parent.width - Theme.spacingS) / 2
+                    height: 34
+                    radius: Theme.cornerRadius
+                    color: root.activeModule === "agenda" ? Theme.primary : Theme.surfaceContainerHigh
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXS
+
+                        DankIcon {
+                            name: "calendar_today"
+                            size: 16
+                            color: root.activeModule === "agenda" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: "日程"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: root.activeModule === "agenda" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
                         }
                     }
 
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: globalActiveModule.set("agenda")
+                    }
                 }
 
+                // Tab 2: 待办任务
+                Rectangle {
+                    width: (parent.width - Theme.spacingS) / 2
+                    height: 34
+                    radius: Theme.cornerRadius
+                    color: root.activeModule === "tasks" ? Theme.primary : Theme.surfaceContainerHigh
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXS
+
+                        DankIcon {
+                            name: "task_alt"
+                            size: 16
+                            color: root.activeModule === "tasks" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: root.pendingTasksCount > 0 ? ("待办 (" + root.pendingTasksCount + ")") : "待办"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: root.activeModule === "tasks" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: globalActiveModule.set("tasks")
+                    }
+                }
             }
 
             // Sync Error Banner
@@ -839,15 +1125,16 @@ PluginComponent {
                 }
             }
 
+            // Agenda View Container
             Item {
+                visible: root.activeModule === "agenda"
                 width: parent.width
                 // The list scrolls inside a fixed viewport when it grows
                 // beyond the popout. agendaContentHeight is computed with
                 // the model (fixed per-kind row heights), so the popout has
                 // its final size before DankPopout positions it.
-                readonly property real maxListHeight: 470
-
-                implicitHeight: Math.max(40, Math.min(root.agendaContentHeight + Theme.spacingM * 2, maxListHeight))
+                height: 420
+                implicitHeight: visible ? 420 : 0
 
                 DankFlickable {
                     id: agendaFlick
@@ -1116,6 +1403,20 @@ PluginComponent {
 
             }
 
+            // Tasks View Container
+            TasksView {
+                id: tasksViewItem
+                visible: root.activeModule === "tasks"
+                width: parent.width
+                height: 420
+                implicitHeight: visible ? 420 : 0
+                rootWidget: root
+                onCloseRequested: {
+                    if (popout.closePopout)
+                        popout.closePopout();
+                }
+            }
+
         }
 
     }
@@ -1144,98 +1445,180 @@ PluginComponent {
 
                 spacing: Theme.spacingXS
 
-                DankIcon {
-                    id: hIcon
-                    name: root.isRefreshing ? "sync" : "calendar_today"
-                    size: iconSize
-                    color: Theme.primary
+                Item {
+                    width: iconSize
+                    height: iconSize
                     anchors.verticalCenter: parent.verticalCenter
-                    smoothTransform: true
-                    layer.enabled: true
-                    transformOrigin: Item.Center
 
-                    RotationAnimation {
-                        target: hIcon
-                        property: "rotation"
-                        from: 0
-                        to: 360
-                        duration: 800
-                        loops: Animation.Infinite
-                        running: root.isRefreshing
-                        onRunningChanged: {
-                            if (!running)
-                                hIcon.rotation = 0;
+                    DankIcon {
+                        id: hIcon
+                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : "calendar_today")
+                        size: iconSize
+                        color: Theme.primary
+                        anchors.centerIn: parent
+                        smoothTransform: true
+                        layer.enabled: true
+                        transformOrigin: Item.Center
+
+                        RotationAnimation {
+                            target: hIcon
+                            property: "rotation"
+                            from: 0
+                            to: 360
+                            duration: 800
+                            loops: Animation.Infinite
+                            running: root.isRefreshing
+                            onRunningChanged: {
+                                if (!running)
+                                    hIcon.rotation = 0;
+                            }
                         }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.cycleModule()
                     }
                 }
 
-                Item {
-                    id: summaryClip
-                    visible: (root.pillDisplayMode !== "countdownOnly") || !root.hasEvent
-
-                    width: root.dynamicWidth ? Math.min(summaryText.implicitWidth, root.pillMaxWidth) : root.pillMaxWidth
-                    height: summaryText.implicitHeight
-                    clip: true
+                // Agenda Mode Display
+                Row {
+                    spacing: Theme.spacingXS
+                    visible: root.activeModule === "agenda"
                     anchors.verticalCenter: parent.verticalCenter
 
-                    property real overflow: Math.max(0, summaryText.implicitWidth - width)
+                    Item {
+                        id: summaryClip
+                        visible: (root.pillDisplayMode !== "countdownOnly") || !root.hasEvent
+
+                        width: root.dynamicWidth ? Math.min(summaryText.implicitWidth, root.pillMaxWidth) : root.pillMaxWidth
+                        height: summaryText.implicitHeight
+                        clip: true
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        property real overflow: Math.max(0, summaryText.implicitWidth - width)
+
+                        StyledText {
+                            id: summaryText
+
+                            width: root.scrollTitle ? implicitWidth : summaryClip.width
+                            text: root.hasEvent ? root.eventSummary : "No events"
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceText
+                            wrapMode: Text.NoWrap
+                            maximumLineCount: 1
+                            elide: root.scrollTitle ? Text.ElideNone : Text.ElideRight
+                        }
+
+                        SequentialAnimation {
+                            running: root.scrollTitle && summaryClip.overflow > 0 && summaryClip.visible
+                            loops: Animation.Infinite
+                            onRunningChanged: if (!running) summaryText.x = 0
+
+                            PauseAnimation { duration: 2000 }
+
+                            NumberAnimation {
+                                target: summaryText
+                                property: "x"
+                                to: -summaryClip.overflow
+                                duration: summaryClip.overflow * 25
+                                easing.type: Easing.Linear
+                            }
+
+                            PauseAnimation { duration: 1500 }
+
+                            NumberAnimation {
+                                target: summaryText
+                                property: "x"
+                                to: 0
+                                duration: 300
+                            }
+
+                        }
+
+                    }
 
                     StyledText {
-                        id: summaryText
-
-                        width: root.scrollTitle ? implicitWidth : summaryClip.width
-                        text: root.hasEvent ? root.eventSummary : "No events"
+                        text: "•"
                         font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
+                        color: root.timeColor
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.hasEvent && root.pillDisplayMode === "full"
+                    }
+
+                    StyledText {
+                        text: root.timeText
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
+                        color: root.timeColor
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.hasEvent && root.pillDisplayMode !== "titleOnly"
+                    }
+
+                }
+
+                // Tasks Mode Display
+                Row {
+                    spacing: Theme.spacingXS
+                    visible: root.activeModule === "tasks"
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    StyledText {
+                        text: root.pendingTasksCount > 0 ? (root.pendingTasksCount + " 项待办") : "全部完成"
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
                         color: Theme.surfaceText
-                        wrapMode: Text.NoWrap
-                        maximumLineCount: 1
-                        elide: root.scrollTitle ? Text.ElideNone : Text.ElideRight
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    SequentialAnimation {
-                        running: root.scrollTitle && summaryClip.overflow > 0 && summaryClip.visible
-                        loops: Animation.Infinite
-                        onRunningChanged: if (!running) summaryText.x = 0
+                    Item {
+                        id: taskSummaryClip
+                        visible: root.pendingTasks.length > 0 && Boolean(root.pendingTasks[0].summary)
+                        width: root.dynamicWidth ? Math.min(taskSummaryText.implicitWidth, root.pillMaxWidth) : root.pillMaxWidth
+                        height: taskSummaryText.implicitHeight
+                        clip: true
+                        anchors.verticalCenter: parent.verticalCenter
 
-                        PauseAnimation { duration: 2000 }
+                        property real overflow: Math.max(0, taskSummaryText.implicitWidth - width)
 
-                        NumberAnimation {
-                            target: summaryText
-                            property: "x"
-                            to: -summaryClip.overflow
-                            duration: summaryClip.overflow * 25
-                            easing.type: Easing.Linear
+                        StyledText {
+                            id: taskSummaryText
+                            width: root.scrollTitle ? implicitWidth : taskSummaryClip.width
+                            text: (root.pendingTasks.length > 0 && root.pendingTasks[0].summary) ? ("·  " + root.pendingTasks[0].summary) : ""
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceVariantText
+                            wrapMode: Text.NoWrap
+                            maximumLineCount: 1
+                            elide: root.scrollTitle ? Text.ElideNone : Text.ElideRight
                         }
 
-                        PauseAnimation { duration: 1500 }
+                        SequentialAnimation {
+                            running: root.scrollTitle && taskSummaryClip.overflow > 0 && taskSummaryClip.visible
+                            loops: Animation.Infinite
+                            onRunningChanged: if (!running) taskSummaryText.x = 0
 
-                        NumberAnimation {
-                            target: summaryText
-                            property: "x"
-                            to: 0
-                            duration: 300
+                            PauseAnimation { duration: 2000 }
+
+                            NumberAnimation {
+                                target: taskSummaryText
+                                property: "x"
+                                to: -taskSummaryClip.overflow
+                                duration: taskSummaryClip.overflow * 25
+                                easing.type: Easing.Linear
+                            }
+
+                            PauseAnimation { duration: 1500 }
+
+                            NumberAnimation {
+                                target: taskSummaryText
+                                property: "x"
+                                to: 0
+                                duration: 300
+                            }
                         }
-
                     }
-
-                }
-
-                StyledText {
-                    text: "•"
-                    font.pixelSize: Theme.fontSizeSmall
-                    font.weight: Font.Medium
-                    color: root.timeColor
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.hasEvent && root.pillDisplayMode === "full"
-                }
-
-                StyledText {
-                    text: root.timeText
-                    font.pixelSize: Theme.fontSizeSmall
-                    font.weight: Font.Medium
-                    color: root.timeColor
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.hasEvent && root.pillDisplayMode !== "titleOnly"
                 }
 
             }
@@ -1277,37 +1660,46 @@ PluginComponent {
 
                 spacing: Theme.spacingXS || 4
 
-                DankIcon {
-                    id: vIcon
-                    name: root.isRefreshing ? "sync" : "calendar_today"
-                    size: iconSize
-                    color: Theme.primary
+                Item {
+                    width: iconSize
+                    height: iconSize
                     anchors.horizontalCenter: parent.horizontalCenter
-                    smoothTransform: true
-                    layer.enabled: true
-                    transformOrigin: Item.Center
 
-                    RotationAnimation {
-                        target: vIcon
-                        property: "rotation"
-                        from: 0
-                        to: 360
-                        duration: 800
-                        loops: Animation.Infinite
-                        running: root.isRefreshing
-                        onRunningChanged: {
-                            if (!running)
-                                vIcon.rotation = 0;
+                    DankIcon {
+                        id: vIcon
+                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : "calendar_today")
+                        size: iconSize
+                        color: Theme.primary
+                        anchors.centerIn: parent
+                        smoothTransform: true
+                        layer.enabled: true
+                        transformOrigin: Item.Center
+
+                        RotationAnimation {
+                            target: vIcon
+                            property: "rotation"
+                            from: 0
+                            to: 360
+                            duration: 800
+                            loops: Animation.Infinite
+                            running: root.isRefreshing
+                            onRunningChanged: {
+                                if (!running)
+                                    vIcon.rotation = 0;
+                            }
                         }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.cycleModule()
                     }
                 }
 
-                // Compact countdown so it fits a narrow vertical bar. The event
-                // summary (which scrolls on the horizontal pill) is shown in a
-                // hover tooltip instead.
                 NumericText {
                     width: root.widgetThickness
-                    text: root.compactTimeText
+                    text: root.activeModule === "tasks" ? (root.pendingTasksCount > 0 ? String(root.pendingTasksCount) : "✓") : root.compactTimeText
                     reserveText: "99d"
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Bold
@@ -1315,7 +1707,7 @@ PluginComponent {
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                     anchors.horizontalCenter: parent.horizontalCenter
-                    visible: root.hasEvent
+                    visible: root.activeModule === "tasks" || root.hasEvent
                 }
 
             }

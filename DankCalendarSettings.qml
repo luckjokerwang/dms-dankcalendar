@@ -81,7 +81,7 @@ PluginSettings {
         label: "Event Name Width"
         description: "Maximum width for the event name in the bar (pixels)"
         defaultValue: 160
-        minimum: 80
+        minimum: 40
         maximum: 300
         unit: "px"
         leftIcon: "width"

@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+import subprocess
+import json
+import sys
+
+def main():
+    try:
+        cals_proc = subprocess.run(
+            ['dcal', 'ipc', 'calendars.list'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=3
+        )
+        if cals_proc.returncode != 0:
+            print(json.dumps({"error": "Failed to fetch calendars", "tasks": [], "pendingCount": 0}))
+            return
+
+        cals = json.loads(cals_proc.stdout)
+        task_cals = [c for c in cals if c.get('holdsTasks')]
+        cal_map = {c['id']: c.get('name') or c.get('accountName') or 'Tasks' for c in task_cals}
+        default_cal_id = task_cals[0]['id'] if task_cals else ''
+
+        tasks_proc = subprocess.run(
+            ['dcal', 'ipc', 'tasks.list'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=3
+        )
+        if tasks_proc.returncode != 0:
+            print(json.dumps({"error": "Failed to fetch tasks", "tasks": [], "pendingCount": 0}))
+            return
+
+        data = json.loads(tasks_proc.stdout)
+        all_tasks = data.get('tasks', [])
+
+        pending = []
+        completed = []
+        for t in all_tasks:
+            t['calendarName'] = cal_map.get(t.get('calendarId'), 'Tasks')
+            if t.get('status') == 'completed' or bool(t.get('completed')):
+                completed.append(t)
+            else:
+                pending.append(t)
+
+        def task_sort_key(idx_and_task):
+            idx, t = idx_and_task
+            p = t.get('priority') or 0
+            # 1-9 are high/medium/low priority; 0 is normal (rank 10)
+            p_rank = p if (1 <= p <= 9) else 10
+            due = t.get('due') or '9999-99-99'
+            return (p_rank, due, idx)
+
+        indexed_pending = list(enumerate(pending))
+        indexed_pending.sort(key=task_sort_key)
+        pending = [t for _, t in indexed_pending]
+
+        res = {
+            'pending': pending,
+            'completed': completed,
+            'pendingCount': len(pending),
+            'completedCount': len(completed),
+            'defaultCalendarId': default_cal_id,
+            'taskCalendars': [{'id': c['id'], 'name': c.get('name') or 'Tasks'} for c in task_cals]
+        }
+        print(json.dumps(res, ensure_ascii=False))
+
+    except Exception as e:
+        print(json.dumps({
+            "error": str(e),
+            "pending": [],
+            "completed": [],
+            "pendingCount": 0,
+            "completedCount": 0,
+            "defaultCalendarId": "",
+            "taskCalendars": []
+        }))
+
+if __name__ == '__main__':
+    main()
