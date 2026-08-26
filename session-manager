@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""
+session-manager
+Manages chat session history (list, get, delete, clear).
+"""
+
+import sys
+import os
+import json
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "data")
+SESSIONS_DIR = os.path.join(DATA_DIR, "sessions")
+os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+def list_sessions():
+    sessions = []
+    if os.path.exists(SESSIONS_DIR):
+        for fname in os.listdir(SESSIONS_DIR):
+            if fname.endswith(".json"):
+                path = os.path.join(SESSIONS_DIR, fname)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        sessions.append({
+                            "id": data.get("id", fname[:-5]),
+                            "title": data.get("title", "未命名会话"),
+                            "updatedAt": data.get("updatedAt", ""),
+                            "messageCount": len(data.get("messages", []))
+                        })
+                except Exception:
+                    pass
+    sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+    print(json.dumps(sessions, ensure_ascii=False))
+
+def get_session(session_id):
+    path = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                print(f.read())
+                return
+        except Exception:
+            pass
+    print(json.dumps({"id": session_id, "title": "新会话", "messages": []}))
+
+def delete_session(session_id):
+    path = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    if os.path.exists(path):
+        os.remove(path)
+    print(json.dumps({"status": "ok"}))
+
+def clear_all():
+    if os.path.exists(SESSIONS_DIR):
+        for fname in os.listdir(SESSIONS_DIR):
+            if fname.endswith(".json"):
+                os.remove(os.path.join(SESSIONS_DIR, fname))
+    print(json.dumps({"status": "ok"}))
+
+def main():
+    if len(sys.argv) < 2:
+        list_sessions()
+        return
+
+    cmd = sys.argv[1]
+    if cmd == "list":
+        list_sessions()
+    elif cmd == "get" and len(sys.argv) > 2:
+        get_session(sys.argv[2])
+    elif cmd == "delete" and len(sys.argv) > 2:
+        delete_session(sys.argv[2])
+    elif cmd == "clear":
+        clear_all()
+    else:
+        list_sessions()
+
+if __name__ == "__main__":
+    main()

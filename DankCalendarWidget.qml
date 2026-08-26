@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -7,6 +8,7 @@ import qs.Modules.Plugins
 import qs.Services
 import qs.Widgets
 import "./components"
+import "./components/ai"
 
 // Next-event countdown for dcal / DankCalendar, click model borrowed from
 // dms-dankmail: left click opens a popout with today's events (click one to
@@ -38,19 +40,15 @@ PluginComponent {
         if (!eventStart)
             return -1;
 
-        var startMs = eventDate(eventStart, eventAllDay).getTime();
-        return startMs - countdownNow;
+        return eventDate(eventStart, eventAllDay).getTime() - countdownNow;
     }
     property bool isNow: {
-        if (nowWindowMinutes <= 0 || eventStart === "" || remainingMs > 0)
+        if (!eventStart || nowWindowMinutes <= 0)
             return false;
 
         var startMs = eventDate(eventStart, eventAllDay).getTime();
-        var endMs = eventEnd ? eventDate(eventEnd, eventAllDay).getTime() : startMs;
-        var duration = endMs - startMs;
-        var maxWindow = nowWindowMinutes * 60000;
-        var nowWindow = duration < maxWindow ? duration : maxWindow;
-        return countdownNow < startMs + nowWindow;
+        var nowWindowMs = nowWindowMinutes * 60000;
+        return countdownNow >= startMs && countdownNow <= (startMs + nowWindowMs);
     }
     property bool isLessThanOneMin: !isNow && remainingMs > 0 && remainingMs < 60000
     property bool hasEvent: eventSummary !== ""
@@ -66,8 +64,8 @@ PluginComponent {
     property int agendaContentHeight: 0
     property int agendaTodayOffset: 0
     property bool agendaLoading: true
-    popoutWidth: 420
-    popoutHeight: 540
+    popoutWidth: 440
+    popoutHeight: 560
 
     PluginGlobalVar {
         id: globalActiveModule
@@ -77,6 +75,13 @@ PluginComponent {
     readonly property string activeModule: globalActiveModule.value || "agenda"
 
     property string tasksScriptPath: Qt.resolvedUrl("./get-tasks").toString().replace(/^file:\/\//, "")
+    property string aiScriptPath: Qt.resolvedUrl("./ai-client").toString().replace(/^file:\/\//, "")
+    property string batchScriptPath: Qt.resolvedUrl("./batch-create-items").toString().replace(/^file:\/\//, "")
+    property string sessionScriptPath: Qt.resolvedUrl("./session-manager").toString().replace(/^file:\/\//, "")
+    property string pasteHelperPath: Qt.resolvedUrl("./clipboard-paste-helper").toString().replace(/^file:\/\//, "")
+    property string aiBaseUrl: pluginData.aiBaseUrl || "https://apihub.agnes-ai.com/v1"
+    property string aiApiKey: pluginData.aiApiKey || ""
+    property string aiModel: pluginData.aiModel || "agnes-2.5-flash"
     property var pendingTasks: []
     property var completedTasks: []
     property int pendingTasksCount: 0
@@ -234,7 +239,13 @@ PluginComponent {
     }
 
     function cycleModule() {
-        globalActiveModule.set(activeModule === "agenda" ? "tasks" : "agenda");
+        if (activeModule === "agenda") {
+            globalActiveModule.set("tasks");
+        } else if (activeModule === "tasks") {
+            globalActiveModule.set("ai");
+        } else {
+            globalActiveModule.set("agenda");
+        }
     }
 
     function fetchTasks() {
@@ -656,8 +667,8 @@ PluginComponent {
             return ;
 
         var screen = root.parentScreen;
-        var edge = root.axis?.edge ?? (root.isVertical ? "left" : "top");
-        var gap = (root.barConfig?.spacing ?? 4) + Theme.spacingXS;
+        var edge = (root.axis && root.axis.edge !== undefined) ? root.axis.edge : (root.isVertical ? "left" : "top");
+        var gap = (root.barConfig && root.barConfig.spacing !== undefined ? root.barConfig.spacing : 4) + Theme.spacingXS;
         var center = pill.mapToItem(null, pill.width / 2, pill.height / 2);
         var side, anchorX, anchorY;
         if (edge === "left") {
@@ -749,7 +760,7 @@ PluginComponent {
 
             margins {
                 left: {
-                    var sw = ttip.screen?.width ?? Screen.width;
+                    var sw = (ttip.screen && ttip.screen.width) ? ttip.screen.width : Screen.width;
                     var lx;
                     if (ttip.side === "right")
                         lx = ttip.targetX;
@@ -760,7 +771,7 @@ PluginComponent {
                     return Math.round(Math.max(Theme.spacingS, Math.min(sw - ttip.implicitWidth - Theme.spacingS, lx)));
                 }
                 top: {
-                    var sh = ttip.screen?.height ?? Screen.height;
+                    var sh = (ttip.screen && ttip.screen.height) ? ttip.screen.height : Screen.height;
                     var ty;
                     if (ttip.side === "bottom")
                         ty = ttip.targetY;
@@ -777,7 +788,7 @@ PluginComponent {
 
                 implicitWidth: ttCol.width + Theme.spacingM * 2
                 implicitHeight: ttCol.implicitHeight + Theme.spacingS * 2
-                color: Theme.withAlpha(Theme.surfaceContainerHigh, root.barConfig?.transparency ?? 1)
+                color: Theme.withAlpha(Theme.surfaceContainerHigh, (root.barConfig && root.barConfig.transparency !== undefined) ? root.barConfig.transparency : 1)
                 radius: Theme.cornerRadius
                 border.width: 1
                 border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.18)
@@ -876,6 +887,138 @@ PluginComponent {
 
         }
 
+    }
+
+    PluginGlobalVar {
+        id: globalAiModalOpen
+        varName: "dankCalendarAiModalOpen"
+        defaultValue: false
+    }
+
+    function toggleAiModal() {
+        globalAiModalOpen.set(!globalAiModalOpen.value);
+    }
+
+    Loader {
+        id: aiModalWindowLoader
+        active: globalAiModalOpen.value === true
+
+        sourceComponent: PanelWindow {
+            id: aiModalWindow
+            WlrLayershell.namespace: "dms:plugins:dankcalendar-ai-modal"
+            WlrLayershell.layer: WlrLayershell.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            color: "transparent"
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+
+            // Dimmed background
+            Rectangle {
+                anchors.fill: parent
+                color: "#80000000"
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: globalAiModalOpen.set(false)
+                }
+            }
+
+            // Centered Modal Window
+            StyledRect {
+                id: modalContainer
+                width: 620
+                height: 680
+                anchors.centerIn: parent
+                color: Theme.surfaceContainerHighest
+                radius: Theme.cornerRadiusLarge
+                border.width: 1
+                border.color: Theme.outlineVariant
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingM
+                    spacing: Theme.spacingS
+
+                    // Header
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingS
+
+                        DankIcon {
+                            name: "smart_toy"
+                            size: 22
+                            color: Theme.primary
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: "Dank Calendar AI 排程助理"
+                            font.pixelSize: Theme.fontSizeMedium
+                            font.weight: Font.Bold
+                            color: Theme.surfaceText
+                        }
+
+                        // Close button
+                        StyledRect {
+                            implicitWidth: 32
+                            implicitHeight: 32
+                            radius: 16
+                            color: mCloseHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+
+                            DankIcon {
+                                anchors.centerIn: parent
+                                name: "close"
+                                size: 18
+                                color: Theme.surfaceVariantText
+                            }
+
+                            HoverHandler { id: mCloseHover }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: globalAiModalOpen.set(false)
+                            }
+                        }
+                    }
+
+                    // Reused ChatView
+                    ChatView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        aiScriptPath: root.aiScriptPath
+                        batchScriptPath: root.batchScriptPath
+                        sessionScriptPath: root.sessionScriptPath
+                        pasteHelperPath: root.pasteHelperPath
+                        aiBaseUrl: root.aiBaseUrl
+                        aiApiKey: root.aiApiKey
+                        aiModel: root.aiModel
+                        onScheduleConfirmed: {
+                            root.refreshAll();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    IpcHandler {
+        target: "dankCalendarPlus"
+
+        function toggleAI() {
+            root.toggleAiModal();
+        }
+
+        function openAI() {
+            globalAiModalOpen.set(true);
+        }
+
+        function closeAI() {
+            globalAiModalOpen.set(false);
+        }
     }
 
     popoutContent: Component {
@@ -1000,7 +1143,7 @@ PluginComponent {
                 }
             }
 
-            // 2. Tab Switcher Pills Row (TimeManager style, full width)
+            // 2. Tab Switcher Pills Row (3 Tabs: Agenda, Tasks, AI)
             Row {
                 width: parent.width - Theme.spacingS * 2
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -1008,7 +1151,7 @@ PluginComponent {
 
                 // Tab 1: 日程
                 Rectangle {
-                    width: (parent.width - Theme.spacingS) / 2
+                    width: (parent.width - Theme.spacingS * 4) / 3
                     height: 34
                     radius: Theme.cornerRadius
                     color: root.activeModule === "agenda" ? Theme.primary : Theme.surfaceContainerHigh
@@ -1019,7 +1162,7 @@ PluginComponent {
 
                         DankIcon {
                             name: "calendar_today"
-                            size: 16
+                            size: 15
                             color: root.activeModule === "agenda" ? Theme.primaryText : Theme.surfaceText
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -1042,7 +1185,7 @@ PluginComponent {
 
                 // Tab 2: 待办任务
                 Rectangle {
-                    width: (parent.width - Theme.spacingS) / 2
+                    width: (parent.width - Theme.spacingS * 4) / 3
                     height: 34
                     radius: Theme.cornerRadius
                     color: root.activeModule === "tasks" ? Theme.primary : Theme.surfaceContainerHigh
@@ -1053,7 +1196,7 @@ PluginComponent {
 
                         DankIcon {
                             name: "task_alt"
-                            size: 16
+                            size: 15
                             color: root.activeModule === "tasks" ? Theme.primaryText : Theme.surfaceText
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -1071,6 +1214,40 @@ PluginComponent {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: globalActiveModule.set("tasks")
+                    }
+                }
+
+                // Tab 3: AI 助理
+                Rectangle {
+                    width: (parent.width - Theme.spacingS * 4) / 3
+                    height: 34
+                    radius: Theme.cornerRadius
+                    color: root.activeModule === "ai" ? Theme.primary : Theme.surfaceContainerHigh
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXS
+
+                        DankIcon {
+                            name: "smart_toy"
+                            size: 15
+                            color: root.activeModule === "ai" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: "助理"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Medium
+                            color: root.activeModule === "ai" ? Theme.primaryText : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: globalActiveModule.set("ai")
                     }
                 }
             }
@@ -1417,6 +1594,25 @@ PluginComponent {
                 }
             }
 
+            // AI Chat View Container
+            ChatView {
+                id: chatViewItem
+                visible: root.activeModule === "ai"
+                width: parent.width
+                height: 420
+                implicitHeight: visible ? 420 : 0
+                aiScriptPath: root.aiScriptPath
+                batchScriptPath: root.batchScriptPath
+                sessionScriptPath: root.sessionScriptPath
+                pasteHelperPath: root.pasteHelperPath
+                aiBaseUrl: root.aiBaseUrl
+                aiApiKey: root.aiApiKey
+                aiModel: root.aiModel
+                onScheduleConfirmed: {
+                    root.refreshAll();
+                }
+            }
+
         }
 
     }
@@ -1452,7 +1648,7 @@ PluginComponent {
 
                     DankIcon {
                         id: hIcon
-                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : "calendar_today")
+                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : root.activeModule === "ai" ? "smart_toy" : "calendar_today")
                         size: iconSize
                         color: Theme.primary
                         anchors.centerIn: parent
@@ -1575,7 +1771,7 @@ PluginComponent {
 
                     Item {
                         id: taskSummaryClip
-                        visible: root.pendingTasks.length > 0 && Boolean(root.pendingTasks[0].summary)
+                        visible: root.pendingTasksCount > 0
                         width: root.dynamicWidth ? Math.min(taskSummaryText.implicitWidth, root.pillMaxWidth) : root.pillMaxWidth
                         height: taskSummaryText.implicitHeight
                         clip: true
@@ -1586,7 +1782,7 @@ PluginComponent {
                         StyledText {
                             id: taskSummaryText
                             width: root.scrollTitle ? implicitWidth : taskSummaryClip.width
-                            text: (root.pendingTasks.length > 0 && root.pendingTasks[0].summary) ? ("·  " + root.pendingTasks[0].summary) : ""
+                            text: (root.pendingTasks.length > 0 && root.pendingTasks[0].summary) ? ("• " + root.pendingTasks[0].summary) : ""
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceVariantText
                             wrapMode: Text.NoWrap
@@ -1618,6 +1814,20 @@ PluginComponent {
                                 duration: 300
                             }
                         }
+                    }
+                }
+
+                // AI Mode Display
+                Row {
+                    spacing: Theme.spacingXS
+                    visible: root.activeModule === "ai"
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    StyledText {
+                        text: "AI 排程助理"
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
+                        color: Theme.primary
                     }
                 }
 
@@ -1667,7 +1877,7 @@ PluginComponent {
 
                     DankIcon {
                         id: vIcon
-                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : "calendar_today")
+                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : root.activeModule === "ai" ? "smart_toy" : "calendar_today")
                         size: iconSize
                         color: Theme.primary
                         anchors.centerIn: parent

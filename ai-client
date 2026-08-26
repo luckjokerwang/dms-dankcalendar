@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""
+ai-client
+OpenAI-compatible streaming client for Dank Calendar Plus AI Agent.
+Handles SSE streaming, image encoding, token pruning, time injection, connection testing, and session persistence.
+"""
+
+import sys
+import os
+import json
+import ssl
+import http.client
+import base64
+import mimetypes
+import datetime
+import urllib.request
+import urllib.error
+import re
+import subprocess
+import shutil
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "data")
+SESSIONS_DIR = os.path.join(DATA_DIR, "sessions")
+os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能日历与待办排程专家 (Dank Calendar Plus AI Assistant)。
+你的核心使命是帮助用户从杂乱的文字、笔记或图片中分析需求，主动追问缺失细节，并制作最科学的日程 (Event) 与待办 (Task) 规划。
+
+【分类决策规则】：
+1. 📅 日程 (Event)：具有明确的起止时间段（如 14:00-15:30）、强时间独占性、需与他人协同（如会议、约会、就医门诊、课程表、航班火车）。
+2. 📋 待办 (Task)：结果导向、关注是否完成、利用碎片时间处理、带截止日期（Due Date）与优先级（如 买牛奶、交周报、阅读章节）。
+3. 🔄 复合拆解：当用户提出复杂目标时，合理拆解为“准备待办 (Task)”与“执行日程 (Event)”。
+
+【日期与截止时间严格对齐规则（极度重要）】：
+- 待办 (Task) 的截止日期 `due` 必须与该事件发生的具体日期完全一致！
+- 如果用户要求安排“明天”的事务，且当前系统时间为 2026-08-25，则明天就是 2026-08-26。
+- 此时日程的 start/end 日期为 2026-08-26，待办的 due 也必须是 2026-08-26，绝对不要写成 2026-08-25！
+
+【排程提案输出格式 (必须严格遵守)】：
+当信息完备并生成具体排程建议时，请在回复文本最后附带一个 ```json:schedule 格式的代码块（不要有多余字段），格式如下：
+```json:schedule
+{
+  "explanation": "简短的一句话排程说明",
+  "events": [
+    {
+      "title": "📚 每日阅读：《原子习惯》",
+      "start": "YYYY-MM-DDTHH:MM:SS",
+      "end": "YYYY-MM-DDTHH:MM:SS",
+      "calendarName": "默认日历"
+    }
+  ],
+  "tasks": [
+    {
+      "summary": "整理第一章读书笔记",
+      "due": "YYYY-MM-DD",
+      "priority": 1,
+      "calendarName": "默认任务"
+    }
+  ]
+}
+```
+优先级 priority 取值：1 (高优), 5 (中优), 9 (低优), 0 (普通)。
+所有时间必须使用 ISO 8601 格式 (YYYY-MM-DDTHH:MM:SS)。
+如果用户仅在打招呼或询问问题，无需输出 schedule 代码块，正常对话即可。
+"""
+
+def get_calendars_context():
+    """Fetches user's available calendars and task lists from dcal."""
+    calendars_info = []
+    if shutil.which("dcal"):
+        try:
+            res = subprocess.run(["dcal", "ipc", "calendars.list"], capture_output=True, text=True, timeout=3)
+            if res.returncode == 0 and res.stdout:
+                data = json.loads(res.stdout)
+                items = data if isinstance(data, list) else data.get("calendars", [])
+                for c in items:
+                    name = c.get("name", "Default")
+                    holds_tasks = c.get("holdsTasks", False)
+                    calendars_info.append(f"- {name} ({'待办清单' if holds_tasks else '日程日历'})")
+        except Exception:
+            pass
+    if not calendars_info:
+        return "默认日历, 默认待办"
+    return "\n".join(calendars_info)
+
+def get_session_file(session_id):
+    return os.path.join(SESSIONS_DIR, f"{session_id}.json")
+
+def load_session(session_id):
+    path = get_session_file(session_id)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"id": session_id, "title": "新会话", "messages": [], "updatedAt": datetime.datetime.now().isoformat()}
+
+def save_session(session):
+    path = get_session_file(session["id"])
+    try:
+        session["updatedAt"] = datetime.datetime.now().isoformat()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(session, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        sys.stderr.write(f"Failed to save session: {e}\n")
+
+def encode_image_to_base64(image_path):
+    if not os.path.exists(image_path):
+        return None, None
+    mime, _ = mimetypes.guess_type(image_path)
+    if not mime:
+        mime = "image/png"
+    try:
+        with open(image_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+            return mime, b64
+    except Exception:
+        return None, None
+
+def emit_event(event_type, payload):
+    data = {"type": event_type}
+    data.update(payload)
+    print(f"data: {json.dumps(data, ensure_ascii=False)}", flush=True)
+
+def create_ssl_context():
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    if hasattr(ssl, "OP_IGNORE_UNEXPECTED_EOF"):
+        ctx.options |= ssl.OP_IGNORE_UNEXPECTED_EOF
+    if hasattr(ssl, "OP_NO_TICKET"):
+        ctx.options |= ssl.OP_NO_TICKET
+    return ctx
+
+def test_connection(base_url, api_key):
+    """Tests API connection and fetches available models."""
+    url = f"{base_url.rstrip('/')}/models"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": "DankCalendarPlus/2.0"
+    }
+    ctx = create_ssl_context()
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = []
+            raw_list = data.get("data", []) if isinstance(data, dict) else data
+            for m in raw_list:
+                mid = m.get("id") if isinstance(m, dict) else str(m)
+                if mid:
+                    models.append(mid)
+            return {"status": "ok", "models": models}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
+        return {"status": "error", "code": e.code, "message": f"HTTP {e.code}: {err_body}"}
+    except Exception as e:
+        return {"status": "error", "code": 500, "message": str(e)}
+
+def main():
+    if len(sys.argv) < 2:
+        emit_event("error", {"code": 400, "message": "Missing arguments. Usage: ai-client '<json_request>'"})
+        sys.exit(1)
+
+    # Check for test mode
+    if sys.argv[1] == "test" and len(sys.argv) >= 4:
+        res = test_connection(sys.argv[2], sys.argv[3])
+        print(json.dumps(res, ensure_ascii=False))
+        return
+
+    try:
+        req = json.loads(sys.argv[1])
+    except Exception as e:
+        emit_event("error", {"code": 400, "message": f"Invalid request JSON: {e}"})
+        sys.exit(1)
+
+    api_key = req.get("apiKey", "").strip()
+    base_url = req.get("baseUrl", "https://apihub.agnes-ai.com/v1").strip().rstrip("/")
+    model = req.get("model", "agnes-2.5-flash").strip()
+    user_prompt = req.get("prompt", "").strip()
+    image_path = req.get("imagePath", "").strip()
+    file_path = req.get("filePath", "").strip()
+    session_id = req.get("sessionId", "").strip() or datetime.datetime.now().strftime("session_%Y%m%d_%H%M%S")
+    custom_system_prompt = req.get("systemPrompt", "").strip() or DEFAULT_SYSTEM_PROMPT
+
+    if not api_key:
+        emit_event("error", {"code": 401, "message": "请先在设置中配置 API Key (Settings -> Dank Calendar Plus -> AI Assistant)"})
+        sys.exit(1)
+
+    session = load_session(session_id)
+
+    # 1. Handle attached text/markdown/document file if present
+    file_extra_text = ""
+    if file_path and os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                file_extra_text = f"\n\n【用户上传的文件内容 ({os.path.basename(file_path)})】:\n" + f.read()[:8000]
+        except Exception:
+            pass
+
+    full_user_text = user_prompt + file_extra_text
+
+    # 2. Build Temporal Context & System Message
+    now = datetime.datetime.now()
+    weekdays_zh = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+    temporal_info = f"当前本地系统时间: {now.strftime('%Y-%m-%d %H:%M:%S')} {weekdays_zh[now.weekday()]}"
+    calendars_str = get_calendars_context()
+
+    system_content = f"{custom_system_prompt}\n\n【当前环境上下文】:\n{temporal_info}\n用户可用的日历清单:\n{calendars_str}"
+
+    api_messages = [{"role": "system", "content": system_content}]
+
+    # 3. Add Pruned History Messages
+    history = session.get("messages", [])[-10:]
+    for msg in history:
+        role = msg.get("role")
+        content = msg.get("content")
+        if isinstance(content, list):
+            pruned_content = []
+            for part in content:
+                if part.get("type") == "image_url":
+                    pruned_content.append({"type": "text", "text": "[用户上传的历史图片]"})
+                else:
+                    pruned_content.append(part)
+            api_messages.append({"role": role, "content": pruned_content})
+        else:
+            api_messages.append({"role": role, "content": content})
+
+    # 4. Build Current User Message with Multi-Modal Image
+    if image_path and os.path.exists(image_path):
+        mime, b64 = encode_image_to_base64(image_path)
+        if b64:
+            current_user_content = [
+                {"type": "text", "text": full_user_text or "请分析这张图片中的日程/待办信息并为我规划。"},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+            ]
+        else:
+            current_user_content = full_user_text
+    else:
+        current_user_content = full_user_text
+
+    api_messages.append({"role": "user", "content": current_user_content})
+
+    session["messages"].append({
+        "role": "user",
+        "content": user_prompt,
+        "imagePath": image_path if image_path else None,
+        "filePath": file_path if file_path else None,
+        "timestamp": now.isoformat()
+    })
+    if session["title"] == "新会话" and user_prompt:
+        session["title"] = user_prompt[:24]
+
+    # 5. Initiate SSE Streaming Request
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": api_messages,
+        "stream": True,
+        "temperature": 0.3
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "User-Agent": "DankCalendarPlus/2.0"
+    }
+
+    ctx = create_ssl_context()
+    req_obj = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+
+    full_assistant_reply = ""
+    try:
+        with urllib.request.urlopen(req_obj, context=ctx, timeout=60) as response:
+            for line in response:
+                line_str = line.decode("utf-8", errors="replace").strip()
+                if not line_str or not line_str.startswith("data:"):
+                    continue
+                data_part = line_str[5:].strip()
+                if data_part == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_part)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    content_chunk = delta.get("content", "")
+                    if content_chunk:
+                        full_assistant_reply += content_chunk
+                        emit_event("delta", {"content": content_chunk})
+                except Exception:
+                    pass
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
+        emit_event("error", {"code": e.code, "message": f"API Error ({e.code}): {err_msg}"})
+        sys.exit(1)
+    except (ssl.SSLError, http.client.IncompleteRead, http.client.RemoteDisconnected) as e:
+        if not full_assistant_reply:
+            emit_event("error", {"code": 500, "message": f"网络传输中断: {str(e)}"})
+            sys.exit(1)
+    except Exception as e:
+        if not full_assistant_reply:
+            emit_event("error", {"code": 500, "message": f"Network Error: {str(e)}"})
+            sys.exit(1)
+
+    # 6. Extract Schedule Proposals if present
+    proposal_data = None
+    schedule_match = re.search(r"```json:schedule\s*([\s\S]*?)\s*```", full_assistant_reply)
+    if schedule_match:
+        try:
+            raw_json = schedule_match.group(1).strip()
+            proposal_data = json.loads(raw_json)
+            emit_event("proposal", {"proposal": proposal_data})
+        except Exception as e:
+            sys.stderr.write(f"Failed to parse schedule proposal json: {e}\n")
+
+    # 7. Save Session & Emit Done Event
+    session["messages"].append({
+        "role": "assistant",
+        "content": full_assistant_reply,
+        "proposal": proposal_data,
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+    save_session(session)
+
+    emit_event("done", {
+        "sessionId": session_id,
+        "title": session["title"],
+        "hasProposal": proposal_data is not None
+    })
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+import subprocess
+import os
+import sys
+import time
+import json
+import re
+
+def get_clipboard_types():
+    try:
+        res = subprocess.run(["wl-paste", "--list-types"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            return res.stdout.strip().splitlines()
+    except Exception:
+        pass
+    return []
+
+def main():
+    types = get_clipboard_types()
+    
+    # 1. Check if raw image in clipboard
+    for t in types:
+        if re.match(r"^image/(png|jpeg|jpg|webp)", t):
+            ts = int(time.time() * 1000)
+            target = f"/tmp/dms_ai_paste_{ts}.png"
+            with open(target, "wb") as f:
+                res = subprocess.run(["wl-paste", "-t", t], stdout=f, stderr=subprocess.PIPE, timeout=3)
+            if res.returncode == 0 and os.path.exists(target) and os.path.getsize(target) > 0:
+                print(json.dumps({"status": "ok", "type": "image", "path": target}))
+                return
+
+    # 2. Check if file URI list in clipboard (copied file from file manager)
+    if "text/uri-list" in types:
+        res = subprocess.run(["wl-paste", "-t", "text/uri-list"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0 and res.stdout.strip():
+            lines = [l.strip() for l in res.stdout.splitlines() if l.strip() and not l.startswith("#")]
+            if lines:
+                fpath = lines[0].replace("file://", "").strip()
+                if os.path.exists(fpath):
+                    lower = fpath.lower()
+                    if lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        print(json.dumps({"status": "ok", "type": "image", "path": fpath}))
+                    else:
+                        print(json.dumps({"status": "ok", "type": "file", "path": fpath}))
+                    return
+
+    # 3. Check plain text in clipboard
+    for t in ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING"]:
+        if t in types:
+            res = subprocess.run(["wl-paste", "-t", t], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout.strip():
+                txt = res.stdout.strip()
+                # Check if the text itself is a local file path
+                clean_path = txt.replace("file://", "").strip()
+                if os.path.exists(clean_path):
+                    lower = clean_path.lower()
+                    if lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        print(json.dumps({"status": "ok", "type": "image", "path": clean_path}))
+                        return
+                    elif lower.endswith((".txt", ".md", ".json", ".pdf", ".csv")):
+                        print(json.dumps({"status": "ok", "type": "file", "path": clean_path}))
+                        return
+                print(json.dumps({"status": "ok", "type": "text", "content": txt}))
+                return
+
+    print(json.dumps({"status": "empty"}))
+
+if __name__ == "__main__":
+    main()
