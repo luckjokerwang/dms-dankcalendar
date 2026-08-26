@@ -43,6 +43,7 @@ DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能�
 当信息完备并生成具体排程建议时，请在回复文本最后附带一个 ```json:schedule 格式的代码块（不要有多余字段），格式如下：
 ```json:schedule
 {
+  "title": "精炼的主题标题（4-8个汉字，如：明日午休排程 / 图书馆自习安排 / 项目周会规划）",
   "explanation": "简短的一句话排程说明",
   "events": [
     {
@@ -108,21 +109,76 @@ def load_session_history(session_id):
     except Exception:
         return []
 
-def save_session_history(session_id, messages, title=""):
-    if not session_id:
-        return
-    fpath = get_session_file(session_id)
+def generate_smart_title(session_id, prompt, proposal, messages):
     existing_title = ""
+    fpath = get_session_file(session_id)
     if os.path.exists(fpath):
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 d = json.load(f)
-                existing_title = d.get("title", "")
+                existing_title = d.get("title", "").strip()
         except Exception:
             pass
 
+    generic_titles = {"新排程会话", "未命名会话", "新会话", "图片排程规划", ""}
+    if existing_title and existing_title not in generic_titles:
+        is_poor_title = (len(existing_title) <= 4 or existing_title.isdigit() or 
+                         existing_title.startswith("帮我") or existing_title.startswith("请帮我") or 
+                         existing_title.startswith("已为您安排") or len(existing_title) > 18)
+        if not is_poor_title:
+            return existing_title
+
+    # 1. Best: LLM directly generated title in proposal JSON (4-8 chars)
+    if proposal and isinstance(proposal, dict):
+        prop_title = proposal.get("title", "").strip()
+        if prop_title:
+            clean_t = re.sub(r"^[^\w\u4e00-\u9fa5]+", "", prop_title)
+            if 2 <= len(clean_t) <= 16:
+                return clean_t
+
+        # 2. Extract from explanation (strip boilerplate phrases)
+        exp = proposal.get("explanation", "").strip()
+        if exp:
+            clean_exp = re.sub(r"^(已为您|已|为您|帮你|已帮您)?(安排|规划|设置|添加|创建|拆解)\s*", "", exp)
+            clean_exp = re.sub(r"^[^\w\u4e00-\u9fa5]+", "", clean_exp)
+            if len(clean_exp) > 14:
+                clean_exp = clean_exp[:14] + "..."
+            if len(clean_exp) >= 2:
+                return clean_exp
+
+        # 3. Extract from first event title
+        events = proposal.get("events", [])
+        if events and isinstance(events, list) and len(events) > 0:
+            et = events[0].get("title", "").strip()
+            if et:
+                return et[:14] if len(et) <= 14 else (et[:14] + "...")
+
+    # 4. Extract from first meaningful user message (stripping query prefixes)
+    for m in messages:
+        if m.get("role") == "user":
+            c = m.get("content", "").strip()
+            if c and not c.startswith("已附加"):
+                clean = c.replace("\n", " ").strip()
+                clean = re.sub(r"^(请|麻烦|帮我|请帮我|我想|我要|安排一下|规划一下|设置|创建|分析一下)\s*", "", clean)
+                if len(clean) > 14:
+                    return clean[:14] + "..."
+                elif len(clean) >= 2 and not clean.isdigit():
+                    return clean
+
+    # 5. Fallback to prompt
+    if prompt:
+        clean = prompt.replace("\n", " ").strip()
+        clean = re.sub(r"^(请|麻烦|帮我|请帮我|我想|我要|安排一下|规划一下|设置|创建|分析一下)\s*", "", clean)
+        return clean[:14] + "..." if len(clean) > 14 else clean
+
+    return "排程规划会话"
+
+def save_session_history(session_id, messages, title=""):
+    if not session_id:
+        return
+    fpath = get_session_file(session_id)
     if not title:
-        title = existing_title or "新排程会话"
+        title = "新排程会话"
 
     data = {
         "id": session_id,
@@ -364,8 +420,8 @@ def main():
         "timestamp": datetime.datetime.now().isoformat()
     })
 
-    # Title generation
-    session_title = prompt[:20] if prompt else "图片排程规划"
+    # Smart title generation
+    session_title = generate_smart_title(session_id, prompt, proposal, new_history)
     save_session_history(session_id, new_history, session_title)
 
     emit_event("done", {

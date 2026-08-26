@@ -201,6 +201,8 @@ StyledRect {
                             font.weight: Font.Medium
                             color: (modelData.id === root.currentSessionId) ? Theme.onPrimaryContainer : Theme.surfaceText
                             elide: Text.ElideRight
+                            maximumLineCount: 1
+                            wrapMode: Text.NoWrap
                         }
 
                         StyledText {

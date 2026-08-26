@@ -57,6 +57,24 @@ def clear_all():
                 os.remove(os.path.join(SESSIONS_DIR, fname))
     print(json.dumps({"status": "ok"}))
 
+def save_session_data(raw_json):
+    try:
+        import datetime
+        data = json.loads(raw_json)
+        session_id = data.get("id")
+        if not session_id:
+            print(json.dumps({"status": "error", "message": "Missing session id"}))
+            return
+        safe_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+        path = os.path.join(SESSIONS_DIR, f"{safe_id}.json")
+        if not data.get("updatedAt"):
+            data["updatedAt"] = datetime.datetime.now().isoformat()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(json.dumps({"status": "ok"}))
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+
 def main():
     if len(sys.argv) < 2:
         list_sessions()
@@ -67,6 +85,9 @@ def main():
         list_sessions()
     elif cmd == "get" and len(sys.argv) > 2:
         get_session(sys.argv[2])
+    elif cmd == "save":
+        raw = sys.argv[2] if len(sys.argv) > 2 else sys.stdin.read()
+        save_session_data(raw)
     elif cmd == "delete" and len(sys.argv) > 2:
         delete_session(sys.argv[2])
     elif cmd == "clear":

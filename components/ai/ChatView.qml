@@ -222,6 +222,40 @@ StyledRect {
         }
     }
 
+    function updateMessageProposal(msgIndex, updatedProposal) {
+        if (msgIndex >= 0 && msgIndex < messages.length) {
+            var prevContentY = msgListView.contentY
+            var newMsgs = messages.slice()
+            var targetMsg = Object.assign({}, newMsgs[msgIndex])
+            targetMsg.proposal = updatedProposal
+            newMsgs[msgIndex] = targetMsg
+            messages = newMsgs
+            saveCurrentSessionToDisk()
+            Qt.callLater(() => {
+                msgListView.contentY = prevContentY
+            })
+        }
+    }
+
+    function saveCurrentSessionToDisk() {
+        if (!currentSessionId) return
+        var script = sessionScriptPath || Qt.resolvedUrl("../../session-manager").toString().replace(/^file:\/\//, "")
+        var payload = {
+            "id": currentSessionId,
+            "title": currentSessionTitle,
+            "messages": messages
+        }
+        saveSessionProc.running = false
+        saveSessionProc.command = [script, "save", JSON.stringify(payload)]
+        saveSessionProc.running = true
+    }
+
+    Process {
+        id: saveSessionProc
+        command: []
+        running: false
+    }
+
     // AI Generation Process
     Process {
         id: aiProc
@@ -274,7 +308,7 @@ StyledRect {
     }
 
     function finishGeneration(sessionTitle, proposal) {
-        if (sessionTitle && currentSessionTitle === "新排程会话") {
+        if (sessionTitle && (currentSessionTitle === "新排程会话" || currentSessionTitle === "未命名会话" || currentSessionTitle.length <= 4)) {
             currentSessionTitle = sessionTitle
         }
         var finalProposal = proposal || extractProposalFromText(streamingAssistantText)
@@ -350,6 +384,7 @@ StyledRect {
             })
             messages = helpMsgs
             chatInputField.text = ""
+            Qt.callLater(() => msgListView.positionViewAtEnd())
         }
         filteredCommands = []
         selectedSlashIndex = 0
@@ -374,6 +409,7 @@ StyledRect {
             timestamp: new Date().toISOString()
         })
         messages = sysMsgs
+        Qt.callLater(() => msgListView.positionViewAtEnd())
     }
 
     Process {
@@ -598,6 +634,8 @@ StyledRect {
                     font.weight: Font.Medium
                     color: Theme.surfaceText
                     elide: Text.ElideRight
+                    maximumLineCount: 1
+                    wrapMode: Text.NoWrap
                 }
 
                 // Active Interactive Model Switcher Button (Raycast AI Style)
@@ -807,7 +845,8 @@ StyledRect {
                             visible: !!modelData.proposal
                             proposal: modelData.proposal
                             batchScriptPath: root.batchScriptPath
-                            onConfirmed: {
+                            onConfirmed: (updatedProposal) => {
+                                root.updateMessageProposal(index, updatedProposal)
                                 root.scheduleConfirmed()
                             }
                         }

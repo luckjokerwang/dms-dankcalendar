@@ -10,13 +10,13 @@ StyledRect {
 
     property var proposal: null
     property string batchScriptPath: ""
-    property var selectedEvents: []
-    property var selectedTasks: []
+    property var selectedEvents: (proposal && proposal.selectedEvents) ? proposal.selectedEvents : []
+    property var selectedTasks: (proposal && proposal.selectedTasks) ? proposal.selectedTasks : []
     property bool isWriting: false
-    property bool isCommitted: false
-    property string resultMessage: ""
+    property bool isCommitted: (proposal && proposal.committed === true) || false
+    property string resultMessage: (proposal && proposal.resultMessage) ? proposal.resultMessage : (isCommitted ? "✓ 已成功添加至日历与待办" : "")
 
-    signal confirmed()
+    signal confirmed(var updatedProposal)
 
     implicitWidth: parent ? parent.width : 360
     implicitHeight: mainLayout.implicitHeight + Theme.spacingM * 2
@@ -39,14 +39,28 @@ StyledRect {
                     if (res.status === "ok" || res.createdEvents > 0 || res.createdTasks > 0) {
                         root.isCommitted = true
                         root.resultMessage = "✓ 成功添加 " + (res.createdEvents || 0) + " 项日程, " + (res.createdTasks || 0) + " 项待办"
-                        root.confirmed()
+                        var updated = Object.assign({}, root.proposal, {
+                            "committed": true,
+                            "resultMessage": root.resultMessage,
+                            "selectedEvents": root.selectedEvents,
+                            "selectedTasks": root.selectedTasks,
+                            "committedAt": new Date().toISOString()
+                        })
+                        root.confirmed(updated)
                     } else {
                         root.resultMessage = (res.errors && res.errors.length > 0) ? res.errors.join("; ") : (res.message || "写入失败")
                     }
                 } catch(e) {
                     root.resultMessage = "写入完成"
                     root.isCommitted = true
-                    root.confirmed()
+                    var fallbackUpdated = Object.assign({}, root.proposal, {
+                        "committed": true,
+                        "resultMessage": root.resultMessage,
+                        "selectedEvents": root.selectedEvents,
+                        "selectedTasks": root.selectedTasks,
+                        "committedAt": new Date().toISOString()
+                    })
+                    root.confirmed(fallbackUpdated)
                 }
                 root.isWriting = false
             }
