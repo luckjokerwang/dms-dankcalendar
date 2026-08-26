@@ -21,7 +21,7 @@ StyledRect {
     property string customSystemPrompt: ""
 
     property string currentSessionId: ""
-    property string currentSessionTitle: "新会话"
+    property string currentSessionTitle: "新排程会话"
     property var messages: []
     property bool isGenerating: false
     property string streamingAssistantText: ""
@@ -33,7 +33,7 @@ StyledRect {
     // Slash command suggestions popup
     readonly property var availableCommands: [
         { "cmd": "/new", "desc": "开启全新排程会话", "icon": "add_comment" },
-        { "cmd": "/session", "desc": "展开会话历史抽屉", "icon": "history" },
+        { "cmd": "/session", "desc": "展开历史会话抽屉", "icon": "history" },
         { "cmd": "/model", "desc": "切换当前生效的大模型", "icon": "psychology" },
         { "cmd": "/clear", "desc": "清空当前会话消息", "icon": "delete_sweep" },
         { "cmd": "/help", "desc": "查看指令与快捷键指南", "icon": "help_outline" }
@@ -43,7 +43,6 @@ StyledRect {
     property int selectedSlashIndex: 0
 
     signal scheduleConfirmed()
-    signal filePickedAndReady()
 
     color: "transparent"
     clip: true
@@ -54,7 +53,7 @@ StyledRect {
 
     function initNewSession() {
         currentSessionId = "session_" + Date.now()
-        currentSessionTitle = "新会话"
+        currentSessionTitle = "新排程会话"
         messages = []
         streamingAssistantText = ""
         currentProposal = null
@@ -75,24 +74,12 @@ StyledRect {
         id: loadSessionProc
         command: []
         running: false
-        stdout: StdioCollector {
-            id: loadSessionCollector
-            onDataChanged: {
+        stdout: SplitParser {
+            onRead: (line) => {
+                var trimmed = line.trim()
+                if (!trimmed) return
                 try {
-                    var data = JSON.parse(value.trim())
-                    root.currentSessionId = data.id || root.currentSessionId
-                    root.currentSessionTitle = data.title || "未命名会话"
-                    root.messages = data.messages || []
-                    Qt.callLater(() => {
-                        msgListView.positionViewAtEnd()
-                    })
-                } catch(e) {}
-            }
-        }
-        onExited: (code) => {
-            if (code === 0) {
-                try {
-                    var data = JSON.parse(loadSessionCollector.value.trim())
+                    var data = JSON.parse(trimmed)
                     root.currentSessionId = data.id || root.currentSessionId
                     root.currentSessionTitle = data.title || "未命名会话"
                     root.messages = data.messages || []
@@ -155,7 +142,7 @@ StyledRect {
     }
 
     function finishGeneration(sessionTitle, proposal) {
-        if (sessionTitle && currentSessionTitle === "新会话") {
+        if (sessionTitle && currentSessionTitle === "新排程会话") {
             currentSessionTitle = sessionTitle
         }
         var newMsgs = messages.slice()
@@ -300,7 +287,7 @@ StyledRect {
         var newMsgs = messages.slice()
         newMsgs.push({
             role: "user",
-            content: clean || (userImg ? "已发送截图/图片附件" : "已发送文档附件"),
+            content: clean || (userImg ? "已附加截图/图片" : "已附加日程文档"),
             imagePath: userImg,
             filePath: userFile,
             timestamp: new Date().toISOString()
@@ -331,9 +318,10 @@ StyledRect {
         aiProc.running = true
     }
 
-    // Direct Shortcut for Smart Clipboard Paste
+    // Window-level Shortcut for Ctrl+V
     Shortcut {
         sequences: ["Ctrl+V", "Control+V"]
+        context: Qt.WindowShortcut
         onActivated: {
             root.triggerPasteClipboard()
         }
@@ -345,16 +333,17 @@ StyledRect {
         pasteClipboardProc.running = true
     }
 
-    // Python Clipboard paste helper process
+    // Python Clipboard paste helper process using SplitParser for fresh execution
     Process {
         id: pasteClipboardProc
         command: []
         running: false
-        stdout: StdioCollector {
-            id: pasteCollector
-            onDataChanged: {
+        stdout: SplitParser {
+            onRead: (line) => {
+                var trimmed = line.trim()
+                if (!trimmed) return
                 try {
-                    var res = JSON.parse(value.trim())
+                    var res = JSON.parse(trimmed)
                     if (res.status === "ok") {
                         if (res.type === "image") {
                             root.attachedImagePath = res.path
@@ -371,23 +360,9 @@ StyledRect {
                 } catch(e) {}
             }
         }
-        onExited: (code) => {
-            if (code === 0) {
-                try {
-                    var res = JSON.parse(pasteCollector.value.trim())
-                    if (res.status === "ok") {
-                        if (res.type === "image") {
-                            root.attachedImagePath = res.path
-                        } else if (res.type === "file") {
-                            root.attachedFilePath = res.path
-                        }
-                    }
-                } catch(e) {}
-            }
-        }
     }
 
-    // Native DMS File Browser Modal (keeps popout open and avoids focus loss)
+    // Native DMS File Browser Modal
     DMSFileBrowser.FileBrowserSurfaceModal {
         id: nativeFileBrowser
         browserTitle: "选择图片或日程文档"
@@ -429,15 +404,15 @@ StyledRect {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.topMargin: Theme.spacingS
+        anchors.margins: Theme.spacingS
         spacing: Theme.spacingS
 
-        // 1. Session Sub-Header Bar (Clean & Compact)
+        // 1. Session Sub-Header Bar (Clean Material 3 Card)
         StyledRect {
             Layout.fillWidth: true
-            implicitHeight: 34
+            implicitHeight: 36
             color: Theme.surfaceContainerHigh
-            radius: Theme.cornerRadiusSmall
+            radius: Theme.cornerRadius
 
             RowLayout {
                 anchors.fill: parent
@@ -445,11 +420,11 @@ StyledRect {
                 anchors.rightMargin: Theme.spacingM
                 spacing: Theme.spacingS
 
-                // Session drawer toggle
+                // Session drawer toggle button
                 StyledRect {
-                    implicitWidth: 26
-                    implicitHeight: 26
-                    radius: 4
+                    implicitWidth: 28
+                    implicitHeight: 28
+                    radius: 8
                     color: drawerHover.hovered ? Theme.surfaceContainerHighest : "transparent"
 
                     DankIcon {
@@ -477,12 +452,14 @@ StyledRect {
                     elide: Text.ElideRight
                 }
 
-                // Model Badge
+                // Active Model Chip
                 StyledRect {
-                    implicitWidth: modelText.implicitWidth + 12
+                    implicitWidth: modelText.implicitWidth + 14
                     implicitHeight: 22
-                    radius: 6
+                    radius: 11
                     color: Theme.surfaceContainerLowest
+                    border.width: 1
+                    border.color: Theme.outlineVariant
 
                     StyledText {
                         id: modelText
@@ -496,9 +473,9 @@ StyledRect {
 
                 // New Chat Button
                 StyledRect {
-                    implicitWidth: 26
-                    implicitHeight: 26
-                    radius: 4
+                    implicitWidth: 28
+                    implicitHeight: 28
+                    radius: 8
                     color: newHover.hovered ? Theme.surfaceContainerHighest : "transparent"
 
                     DankIcon {
@@ -527,7 +504,7 @@ StyledRect {
                 id: msgListView
                 anchors.fill: parent
                 clip: true
-                spacing: Theme.spacingS
+                spacing: Theme.spacingM
                 model: root.messages
 
                 delegate: ColumnLayout {
@@ -550,7 +527,7 @@ StyledRect {
                             width: Math.min(parent.width * 0.85, uCol.implicitWidth + Theme.spacingM * 2)
                             implicitHeight: uCol.implicitHeight + Theme.spacingS * 2
                             color: Theme.primaryContainer
-                            radius: Theme.cornerRadiusSmall
+                            radius: 14
 
                             ColumnLayout {
                                 id: uCol
@@ -558,12 +535,12 @@ StyledRect {
                                 anchors.margins: Theme.spacingS
                                 spacing: Theme.spacingXS
 
-                                // Image if present
+                                // Image Thumbnail inside bubble
                                 Image {
                                     visible: !!modelData.imagePath
                                     source: modelData.imagePath ? ("file://" + modelData.imagePath) : ""
-                                    Layout.preferredWidth: Math.min(240, userBubble.width - 20)
-                                    Layout.preferredHeight: 140
+                                    Layout.preferredWidth: Math.min(220, userBubble.width - 24)
+                                    Layout.preferredHeight: 130
                                     fillMode: Image.PreserveAspectFit
                                     asynchronous: true
                                 }
@@ -573,7 +550,7 @@ StyledRect {
                                     visible: !!modelData.filePath
                                     implicitWidth: fRow.implicitWidth + 12
                                     implicitHeight: 22
-                                    radius: 4
+                                    radius: 6
                                     color: Theme.surfaceContainerHighest
 
                                     RowLayout {
@@ -616,13 +593,13 @@ StyledRect {
 
                             DankIcon {
                                 name: modelData.error ? "error" : "smart_toy"
-                                size: 15
+                                size: 16
                                 color: modelData.error ? "#d32f2f" : Theme.primary
                             }
 
                             StyledText {
-                                text: modelData.error ? "排程助理 (错误)" : "排程助理"
-                                font.pixelSize: Theme.fontSizeSmall * 0.85
+                                text: modelData.error ? "排程助理 (遇到错误)" : "排程助理"
+                                font.pixelSize: Theme.fontSizeSmall * 0.9
                                 font.weight: Font.Bold
                                 color: modelData.error ? "#d32f2f" : Theme.primary
                             }
@@ -632,7 +609,7 @@ StyledRect {
                             Layout.fillWidth: true
                             implicitHeight: aText.implicitHeight + Theme.spacingM * 2
                             color: modelData.error ? "#ffebee" : Theme.surfaceContainerHigh
-                            radius: Theme.cornerRadiusSmall
+                            radius: 14
                             border.width: modelData.error ? 1 : 0
                             border.color: "#d32f2f"
 
@@ -696,7 +673,7 @@ StyledRect {
                         Layout.fillWidth: true
                         implicitHeight: streamingText.implicitHeight + Theme.spacingM * 2
                         color: Theme.surfaceContainerHigh
-                        radius: Theme.cornerRadiusSmall
+                        radius: 14
 
                         StyledText {
                             id: streamingText
@@ -724,7 +701,7 @@ StyledRect {
                     DankIcon {
                         Layout.alignment: Qt.AlignHCenter
                         name: "auto_awesome"
-                        size: 36
+                        size: 38
                         color: Theme.primary
                     }
 
@@ -743,15 +720,15 @@ StyledRect {
                         color: Theme.surfaceVariantText
                     }
 
-                    // Suggestion Pills
+                    // Modern Starter Cards
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingS
 
                         StyledRect {
                             Layout.fillWidth: true
-                            implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            implicitHeight: 34
+                            radius: Theme.cornerRadius
                             color: sug1Hover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
 
                             StyledText {
@@ -771,13 +748,13 @@ StyledRect {
 
                         StyledRect {
                             Layout.fillWidth: true
-                            implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            implicitHeight: 34
+                            radius: Theme.cornerRadius
                             color: sug2Hover.hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
 
                             StyledText {
                                 anchors.centerIn: parent
-                                text: "📸 粘贴截图提取日程与待办 (按 Ctrl+V 或 📋 粘贴)"
+                                text: "📸 粘贴截图提取日程与待办 (按 Ctrl+V 或点击 📋 粘贴)"
                                 font.pixelSize: Theme.fontSizeSmall * 0.9
                                 color: Theme.secondary || Theme.primary
                             }
@@ -814,21 +791,21 @@ StyledRect {
             }
         }
 
-        // 3. Input & Attachment Area
+        // 3. Modern LLM Input Box Container (ChatGPT / Claude Style)
         Item {
             Layout.fillWidth: true
-            implicitHeight: inputContainer.implicitHeight
+            implicitHeight: inputCard.implicitHeight
 
             // Floating Slash Commands Popup Menu
             StyledRect {
                 id: slashPopup
                 visible: root.filteredCommands.length > 0
-                anchors.bottom: inputContainer.top
+                anchors.bottom: inputCard.top
                 anchors.bottomMargin: Theme.spacingS
                 anchors.left: parent.left
                 anchors.right: parent.right
                 implicitHeight: slashCol.implicitHeight + Theme.spacingS * 2
-                radius: Theme.cornerRadiusSmall
+                radius: Theme.cornerRadius
                 color: Theme.surfaceContainerHighest
                 border.width: 1
                 border.color: Theme.outlineVariant
@@ -856,7 +833,7 @@ StyledRect {
                             readonly property bool isSelected: (root.selectedSlashIndex === index || cmdHover.hovered)
                             Layout.fillWidth: true
                             implicitHeight: 30
-                            radius: Theme.cornerRadiusSmall
+                            radius: 8
                             color: isSelected ? Theme.primary : "transparent"
 
                             RowLayout {
@@ -905,31 +882,34 @@ StyledRect {
                 }
             }
 
-            // Input Container
+            // Outer Input Card (Full ChatGPT Style)
             StyledRect {
-                id: inputContainer
+                id: inputCard
                 width: parent.width
-                implicitHeight: inputCol.implicitHeight + Theme.spacingS * 2
+                implicitHeight: inputCardCol.implicitHeight + Theme.spacingS * 2
                 color: Theme.surfaceContainerHigh
-                radius: Theme.cornerRadiusSmall
+                radius: 16
+                border.width: 1
+                border.color: chatInputField.activeFocus ? Theme.primary : Theme.outlineVariant
 
                 ColumnLayout {
-                    id: inputCol
+                    id: inputCardCol
                     anchors.fill: parent
                     anchors.margins: Theme.spacingS
                     spacing: Theme.spacingXS
 
-                    // Attached Media Cards (Real Visual Thumbnail & Doc Card)
+                    // Attached Media Previews (Rich 60x60 thumbnail & doc pill)
                     RowLayout {
                         visible: !!root.attachedImagePath || !!root.attachedFilePath
                         spacing: Theme.spacingS
+                        Layout.bottomMargin: 2
 
                         // Image Preview Card (Real Thumbnail + Delete Button)
                         StyledRect {
                             visible: !!root.attachedImagePath
                             implicitWidth: 64
                             implicitHeight: 64
-                            radius: Theme.cornerRadiusSmall
+                            radius: 10
                             color: Theme.surfaceContainerHighest
                             clip: true
 
@@ -941,11 +921,11 @@ StyledRect {
                                 asynchronous: true
                             }
 
-                            // Delete button badge
+                            // Delete badge
                             StyledRect {
                                 anchors.top: parent.top
                                 anchors.right: parent.right
-                                anchors.margins: 2
+                                anchors.margins: 3
                                 width: 18
                                 height: 18
                                 radius: 9
@@ -971,7 +951,7 @@ StyledRect {
                             visible: !!root.attachedFilePath
                             implicitWidth: docRow.implicitWidth + Theme.spacingM * 2
                             implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            radius: 8
                             color: Theme.surfaceContainerHighest
 
                             RowLayout {
@@ -1007,22 +987,103 @@ StyledRect {
                         }
                     }
 
-                    // Input Row
+                    // Main Text Input Field
+                    DankTextField {
+                        id: chatInputField
+                        Layout.fillWidth: true
+                        placeholderText: "输入排程需求、按 Ctrl+V 粘贴截图或输入 / 选用指令..."
+                        focus: true
+                        keyForwardTargets: [chatInputField]
+
+                        onTextChanged: {
+                            if (root.isLikelyFilePath(text)) {
+                                var fpath = text.trim().replace(/^file:\/\//, "")
+                                var lower = fpath.toLowerCase()
+                                if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
+                                    root.attachedImagePath = fpath
+                                } else {
+                                    root.attachedFilePath = fpath
+                                }
+                                text = ""
+                                return
+                            }
+                            root.updateSlashSuggestions(text)
+                        }
+
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier)) {
+                                event.accepted = true
+                                root.triggerPasteClipboard()
+                                return
+                            }
+
+                            if (root.filteredCommands.length > 0) {
+                                if (event.key === Qt.Key_Up) {
+                                    event.accepted = true
+                                    root.selectedSlashIndex = (root.selectedSlashIndex - 1 + root.filteredCommands.length) % root.filteredCommands.length
+                                    return
+                                } else if (event.key === Qt.Key_Down) {
+                                    event.accepted = true
+                                    root.selectedSlashIndex = (root.selectedSlashIndex + 1) % root.filteredCommands.length
+                                    return
+                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Tab) {
+                                    event.accepted = true
+                                    if (root.selectedSlashIndex >= 0 && root.selectedSlashIndex < root.filteredCommands.length) {
+                                        root.executeCommand(root.filteredCommands[root.selectedSlashIndex].cmd)
+                                    }
+                                    return
+                                } else if (event.key === Qt.Key_Escape) {
+                                    event.accepted = true
+                                    root.filteredCommands = []
+                                    return
+                                }
+                            }
+
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                if (event.modifiers & Qt.ShiftModifier) {
+                                    // Shift+Enter
+                                } else {
+                                    event.accepted = true
+                                    if (root.isGenerating) {
+                                        root.stopGeneration()
+                                    } else {
+                                        root.sendMessage(text)
+                                    }
+                                }
+                            } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {
+                                event.accepted = true
+                                root.initNewSession()
+                            } else if (event.key === Qt.Key_H && (event.modifiers & Qt.ControlModifier)) {
+                                event.accepted = true
+                                root.showDrawer = !root.showDrawer
+                            } else if (event.key === Qt.Key_Escape) {
+                                if (root.isGenerating) {
+                                    event.accepted = true
+                                    root.stopGeneration()
+                                } else if (root.showDrawer) {
+                                    event.accepted = true
+                                    root.showDrawer = false
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom Action Toolbar Row (ChatGPT / Gemini Style)
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingS
 
-                        // Paste from Clipboard Button (📋)
+                        // 1. Paste Screenshot Button (📋)
                         StyledRect {
-                            implicitWidth: 32
-                            implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            implicitWidth: 30
+                            implicitHeight: 30
+                            radius: 8
                             color: pasteClipHover.hovered ? Theme.surfaceContainerHighest : "transparent"
 
                             DankIcon {
                                 anchors.centerIn: parent
                                 name: "content_paste"
-                                size: 18
+                                size: 17
                                 color: root.attachedImagePath ? Theme.primary : Theme.surfaceText
                             }
 
@@ -1034,17 +1095,17 @@ StyledRect {
                             }
                         }
 
-                        // Attach 📎 button
+                        // 2. Attach File Button (📎)
                         StyledRect {
-                            implicitWidth: 32
-                            implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            implicitWidth: 30
+                            implicitHeight: 30
+                            radius: 8
                             color: clipHover.hovered ? Theme.surfaceContainerHighest : "transparent"
 
                             DankIcon {
                                 anchors.centerIn: parent
                                 name: "attach_file"
-                                size: 18
+                                size: 17
                                 color: Theme.surfaceText
                             }
 
@@ -1056,98 +1117,56 @@ StyledRect {
                             }
                         }
 
-                        // Input Field
-                        DankTextField {
-                            id: chatInputField
-                            Layout.fillWidth: true
-                            placeholderText: "输入排程需求、Ctrl+V 粘贴截图或选用指令..."
-                            focus: true
-                            keyForwardTargets: [chatInputField]
+                        // 3. Slash Command Shortcut Pill (/)
+                        StyledRect {
+                            implicitWidth: slashPillRow.implicitWidth + 12
+                            implicitHeight: 24
+                            radius: 6
+                            color: slashPillHover.hovered ? Theme.surfaceContainerHighest : "transparent"
 
-                            onTextChanged: {
-                                if (root.isLikelyFilePath(text)) {
-                                    var fpath = text.trim().replace(/^file:\/\//, "")
-                                    var lower = fpath.toLowerCase()
-                                    if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
-                                        root.attachedImagePath = fpath
-                                    } else {
-                                        root.attachedFilePath = fpath
-                                    }
-                                    text = ""
-                                    return
+                            RowLayout {
+                                id: slashPillRow
+                                anchors.centerIn: parent
+                                spacing: 2
+
+                                DankIcon {
+                                    name: "terminal"
+                                    size: 13
+                                    color: Theme.surfaceVariantText
                                 }
-                                root.updateSlashSuggestions(text)
+
+                                StyledText {
+                                    text: "指令 (/)"
+                                    font.pixelSize: 11
+                                    color: Theme.surfaceVariantText
+                                }
                             }
 
-                            Keys.onPressed: (event) => {
-                                if (event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier)) {
-                                    event.accepted = true
-                                    root.triggerPasteClipboard()
-                                    return
-                                }
-
-                                if (root.filteredCommands.length > 0) {
-                                    if (event.key === Qt.Key_Up) {
-                                        event.accepted = true
-                                        root.selectedSlashIndex = (root.selectedSlashIndex - 1 + root.filteredCommands.length) % root.filteredCommands.length
-                                        return
-                                    } else if (event.key === Qt.Key_Down) {
-                                        event.accepted = true
-                                        root.selectedSlashIndex = (root.selectedSlashIndex + 1) % root.filteredCommands.length
-                                        return
-                                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Tab) {
-                                        event.accepted = true
-                                        if (root.selectedSlashIndex >= 0 && root.selectedSlashIndex < root.filteredCommands.length) {
-                                            root.executeCommand(root.filteredCommands[root.selectedSlashIndex].cmd)
-                                        }
-                                        return
-                                    } else if (event.key === Qt.Key_Escape) {
-                                        event.accepted = true
-                                        root.filteredCommands = []
-                                        return
-                                    }
-                                }
-
-                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                    if (event.modifiers & Qt.ShiftModifier) {
-                                        // Shift+Enter inserts newline
-                                    } else {
-                                        event.accepted = true
-                                        if (root.isGenerating) {
-                                            root.stopGeneration()
-                                        } else {
-                                            root.sendMessage(text)
-                                        }
-                                    }
-                                } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {
-                                    event.accepted = true
-                                    root.initNewSession()
-                                } else if (event.key === Qt.Key_H && (event.modifiers & Qt.ControlModifier)) {
-                                    event.accepted = true
-                                    root.showDrawer = !root.showDrawer
-                                } else if (event.key === Qt.Key_Escape) {
-                                    if (root.isGenerating) {
-                                        event.accepted = true
-                                        root.stopGeneration()
-                                    } else if (root.showDrawer) {
-                                        event.accepted = true
-                                        root.showDrawer = false
-                                    }
+                            HoverHandler { id: slashPillHover }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    chatInputField.text = "/"
+                                    chatInputField.forceActiveFocus()
                                 }
                             }
                         }
 
-                        // Send or Stop Button
+                        // Spacer
+                        Item { Layout.fillWidth: true }
+
+                        // 4. Send / Stop Circle Button
                         StyledRect {
                             implicitWidth: 32
                             implicitHeight: 32
-                            radius: Theme.cornerRadiusSmall
+                            radius: 16
                             color: root.isGenerating ? "#d32f2f" : Theme.primary
 
                             DankIcon {
                                 anchors.centerIn: parent
-                                name: root.isGenerating ? "stop" : "send"
-                                size: 17
+                                name: root.isGenerating ? "stop" : "arrow_upward"
+                                size: 18
                                 color: "#ffffff"
                             }
 
