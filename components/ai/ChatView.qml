@@ -14,6 +14,7 @@ StyledRect {
     property string batchScriptPath: ""
     property string sessionScriptPath: ""
     property string pasteHelperPath: ""
+    property string providerScriptPath: Qt.resolvedUrl("../../provider-manager").toString().replace(/^file:\/\//, "")
 
     property string aiBaseUrl: "https://apihub.agnes-ai.com/v1"
     property string aiApiKey: ""
@@ -29,6 +30,97 @@ StyledRect {
     property string attachedImagePath: ""
     property string attachedFilePath: ""
     property bool showDrawer: false
+    property bool showModelMenu: false
+    property bool quickAddExpanded: false
+    property string modelSearchFilter: ""
+
+    // Dynamic Providers & Models from ~/.config/dms-ai/providers.json
+    property var configuredProviders: []
+    property string activeProviderId: "agnes"
+
+    function loadProvidersConfig() {
+        var script = providerScriptPath || "provider-manager"
+        loadProvidersProc.command = [script, "list"]
+        loadProvidersProc.running = true
+    }
+
+    Process {
+        id: loadProvidersProc
+        command: []
+        running: false
+        stdout: SplitParser {
+            onRead: (line) => {
+                var trimmed = line.trim()
+                if (!trimmed) return
+                try {
+                    var res = JSON.parse(trimmed)
+                    if (res.status === "ok" && res.data) {
+                        root.configuredProviders = res.data.providers || []
+                        if (res.data.activeModel) {
+                            root.aiModel = res.data.activeModel
+                        }
+                        if (res.data.activeProvider) {
+                            root.activeProviderId = res.data.activeProvider
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
+    // Filtered list of models ONLY from enabled / configured providers
+    readonly property var availableModelsList: {
+        var list = []
+        for (var i = 0; i < configuredProviders.length; i++) {
+            var p = configuredProviders[i]
+            // Only include enabled providers that have an API key or are active
+            if ((p.enabled && (p.apiKey || p.id === "ollama")) || p.id === activeProviderId) {
+                var models = p.models || []
+                for (var j = 0; j < models.length; j++) {
+                    var m = models[j]
+                    list.push({
+                        "id": m.id,
+                        "name": m.name || m.id,
+                        "providerId": p.id,
+                        "providerName": p.name,
+                        "desc": m.desc || "排程大模型",
+                        "icon": p.icon || "smart_toy",
+                        "color": p.color || Theme.primary,
+                        "baseUrl": p.baseUrl,
+                        "apiKey": p.apiKey
+                    })
+                }
+            }
+        }
+        // Fallback default if nothing loaded yet
+        if (list.length === 0) {
+            list.push({
+                "id": "agnes-2.5-flash",
+                "name": "Agnes 2.5 Flash",
+                "providerId": "agnes",
+                "providerName": "Agnes AI",
+                "desc": "极速响应 · 默认推荐",
+                "icon": "bolt",
+                "color": "#e65100"
+            })
+        }
+        return list
+    }
+
+    readonly property var filteredModelsList: {
+        if (!modelSearchFilter || !modelSearchFilter.trim()) {
+            return availableModelsList
+        }
+        var q = modelSearchFilter.trim().toLowerCase()
+        var out = []
+        for (var i = 0; i < availableModelsList.length; i++) {
+            var m = availableModelsList[i]
+            if (m.id.toLowerCase().indexOf(q) !== -1 || m.name.toLowerCase().indexOf(q) !== -1 || m.providerName.toLowerCase().indexOf(q) !== -1) {
+                out.push(m)
+            }
+        }
+        return out
+    }
 
     // Slash command suggestions popup
     readonly property var availableCommands: [
@@ -49,6 +141,7 @@ StyledRect {
 
     Component.onCompleted: {
         initNewSession()
+        loadProvidersConfig()
     }
 
     function initNewSession() {
@@ -61,11 +154,29 @@ StyledRect {
         attachedFilePath = ""
         filteredCommands = []
         selectedSlashIndex = 0
+        showModelMenu = false
+        quickAddExpanded = false
+        modelSearchFilter = ""
+    }
+
+    function extractProposalFromText(txt) {
+        if (!txt) return null
+        var match = txt.match(/```(?:json:schedule|schedule|json)?\s*\n([\s\S]*?)\n```/)
+        if (match && match[1]) {
+            try {
+                var p = JSON.parse(match[1].trim())
+                if (p && (p.events || p.tasks)) {
+                    return p
+                }
+            } catch(e) {}
+        }
+        return null
     }
 
     function loadSession(sessionId) {
         currentSessionId = sessionId
         var script = sessionScriptPath || Qt.resolvedUrl("../../session-manager").toString().replace(/^file:\/\//, "")
+        loadSessionProc.running = false
         loadSessionProc.command = [script, "get", sessionId]
         loadSessionProc.running = true
     }
@@ -74,18 +185,38 @@ StyledRect {
         id: loadSessionProc
         command: []
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim()
-                if (!trimmed) return
+        stdout: StdioCollector {
+            id: loadSessionCollector
+            onStreamFinished: {
+                var raw = (text || "").trim()
+                if (!raw) return
                 try {
-                    var data = JSON.parse(trimmed)
+                    var data = JSON.parse(raw)
                     root.currentSessionId = data.id || root.currentSessionId
                     root.currentSessionTitle = data.title || "未命名会话"
                     root.messages = data.messages || []
                     Qt.callLater(() => {
                         msgListView.positionViewAtEnd()
                     })
+                } catch(e) {
+                    console.warn("[dankCalendarAgenda] load session parse failed:", e)
+                }
+            }
+        }
+
+        onExited: (code) => {
+            if (code === 0 && loadSessionCollector.text) {
+                try {
+                    var raw = loadSessionCollector.text.trim()
+                    if (raw) {
+                        var data = JSON.parse(raw)
+                        root.currentSessionId = data.id || root.currentSessionId
+                        root.currentSessionTitle = data.title || "未命名会话"
+                        root.messages = data.messages || []
+                        Qt.callLater(() => {
+                            msgListView.positionViewAtEnd()
+                        })
+                    }
                 } catch(e) {}
             }
         }
@@ -111,7 +242,8 @@ StyledRect {
                     } else if (ev.type === "proposal") {
                         root.currentProposal = ev.proposal
                     } else if (ev.type === "done") {
-                        root.finishGeneration(ev.title, root.currentProposal)
+                        var finalProp = ev.proposal || root.currentProposal || root.extractProposalFromText(root.streamingAssistantText)
+                        root.finishGeneration(ev.title, finalProp)
                     } else if (ev.type === "error") {
                         root.handleError(ev.code, ev.message)
                     }
@@ -122,7 +254,7 @@ StyledRect {
         onExited: (exitCode) => {
             if (root.isGenerating) {
                 if (root.streamingAssistantText) {
-                    root.finishGeneration(root.currentSessionTitle, root.currentProposal)
+                    root.finishGeneration(root.currentSessionTitle, root.currentProposal || root.extractProposalFromText(root.streamingAssistantText))
                 } else {
                     root.isGenerating = false
                 }
@@ -135,7 +267,7 @@ StyledRect {
             aiProc.running = false
         }
         if (streamingAssistantText) {
-            finishGeneration(currentSessionTitle, currentProposal)
+            finishGeneration(currentSessionTitle, currentProposal || extractProposalFromText(streamingAssistantText))
         } else {
             isGenerating = false
         }
@@ -145,11 +277,12 @@ StyledRect {
         if (sessionTitle && currentSessionTitle === "新排程会话") {
             currentSessionTitle = sessionTitle
         }
+        var finalProposal = proposal || extractProposalFromText(streamingAssistantText)
         var newMsgs = messages.slice()
         newMsgs.push({
             role: "assistant",
             content: streamingAssistantText,
-            proposal: proposal,
+            proposal: finalProposal,
             timestamp: new Date().toISOString()
         })
         messages = newMsgs
@@ -203,22 +336,9 @@ StyledRect {
             chatInputField.text = ""
         } else if (cmd === "/model") {
             if (parts.length > 1) {
-                aiModel = parts[1].trim()
-                var sysMsgs = messages.slice()
-                sysMsgs.push({
-                    role: "system",
-                    content: "已切换模型为: " + aiModel,
-                    timestamp: new Date().toISOString()
-                })
-                messages = sysMsgs
+                selectModel(parts[1].trim())
             } else {
-                var mMsgs = messages.slice()
-                mMsgs.push({
-                    role: "system",
-                    content: "当前模型: " + aiModel + "\n可用命令: /model <模型名> (例如 /model deepseek-chat 或 /model agnes-2.5-flash)",
-                    timestamp: new Date().toISOString()
-                })
-                messages = mMsgs
+                showModelMenu = true
             }
             chatInputField.text = ""
         } else if (cmd === "/help") {
@@ -233,6 +353,33 @@ StyledRect {
         }
         filteredCommands = []
         selectedSlashIndex = 0
+    }
+
+    function selectModel(modelId, providerId) {
+        aiModel = modelId
+        if (providerId) {
+            activeProviderId = providerId
+        }
+        showModelMenu = false
+
+        // Sync to providers.json
+        var script = providerScriptPath || "provider-manager"
+        setActiveProc.command = [script, "set-active", activeProviderId, modelId]
+        setActiveProc.running = true
+
+        var sysMsgs = messages.slice()
+        sysMsgs.push({
+            role: "system",
+            content: "已切换生效模型为: " + modelId,
+            timestamp: new Date().toISOString()
+        })
+        messages = sysMsgs
+    }
+
+    Process {
+        id: setActiveProc
+        command: []
+        running: false
     }
 
     function updateSlashSuggestions(text) {
@@ -283,6 +430,7 @@ StyledRect {
         attachedFilePath = ""
         filteredCommands = []
         selectedSlashIndex = 0
+        showModelMenu = false
 
         var newMsgs = messages.slice()
         newMsgs.push({
@@ -452,22 +600,51 @@ StyledRect {
                     elide: Text.ElideRight
                 }
 
-                // Active Model Chip
+                // Active Interactive Model Switcher Button (Raycast AI Style)
                 StyledRect {
-                    implicitWidth: modelText.implicitWidth + 14
-                    implicitHeight: 22
-                    radius: 11
-                    color: Theme.surfaceContainerLowest
+                    id: modelChipBtn
+                    implicitWidth: modelRow.implicitWidth + Theme.spacingM * 2
+                    implicitHeight: 24
+                    radius: 12
+                    color: modelChipHover.hovered ? Theme.primaryContainer : Theme.surfaceContainerLowest
                     border.width: 1
                     border.color: Theme.outlineVariant
 
-                    StyledText {
-                        id: modelText
+                    RowLayout {
+                        id: modelRow
                         anchors.centerIn: parent
-                        text: root.aiModel
-                        font.pixelSize: 10
-                        font.weight: Font.Medium
-                        color: Theme.primary
+                        spacing: 4
+
+                        DankIcon {
+                            name: "bolt"
+                            size: 13
+                            color: modelChipHover.hovered ? Theme.onPrimaryContainer : Theme.primary
+                        }
+
+                        StyledText {
+                            text: root.aiModel
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                            color: modelChipHover.hovered ? Theme.onPrimaryContainer : Theme.primary
+                        }
+
+                        DankIcon {
+                            name: root.showModelMenu ? "expand_less" : "expand_more"
+                            size: 13
+                            color: modelChipHover.hovered ? Theme.onPrimaryContainer : Theme.surfaceVariantText
+                        }
+                    }
+
+                    HoverHandler { id: modelChipHover }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.loadProvidersConfig()
+                            root.showModelMenu = !root.showModelMenu
+                            root.modelSearchFilter = ""
+                            root.quickAddExpanded = false
+                        }
                     }
                 }
 
@@ -770,6 +947,290 @@ StyledRect {
                 }
             }
 
+            // Raycast AI / Cherry Studio Style Model Switcher Dialog (ONLY configured models)
+            StyledRect {
+                id: modelMenuPopup
+                visible: root.showModelMenu
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width - 16, 320)
+                implicitHeight: modelDialogCol.implicitHeight + Theme.spacingM * 2
+                radius: 16
+                color: Theme.surfaceContainerHighest
+                border.width: 1
+                border.color: Theme.outlineVariant
+                z: 40
+
+                ColumnLayout {
+                    id: modelDialogCol
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingM
+                    spacing: Theme.spacingS
+
+                    // Header
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingS
+
+                        DankIcon {
+                            name: "psychology"
+                            size: 18
+                            color: Theme.primary
+                        }
+
+                        StyledText {
+                            text: "已配置大模型 (Available Models)"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Bold
+                            color: Theme.surfaceText
+                        }
+
+                        StyledRect {
+                            implicitWidth: cntTxt.implicitWidth + 8
+                            implicitHeight: 18
+                            radius: 9
+                            color: Theme.surfaceContainerHigh
+                            StyledText {
+                                id: cntTxt
+                                anchors.centerIn: parent
+                                text: root.filteredModelsList.length
+                                font.pixelSize: 10
+                                color: Theme.surfaceVariantText
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        StyledRect {
+                            implicitWidth: 24
+                            implicitHeight: 24
+                            radius: 12
+                            color: closeMenuHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+                            DankIcon {
+                                anchors.centerIn: parent
+                                name: "close"
+                                size: 14
+                                color: Theme.surfaceVariantText
+                            }
+                            HoverHandler { id: closeMenuHover }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.showModelMenu = false
+                            }
+                        }
+                    }
+
+                    // Search Filter Box
+                    DankTextField {
+                        id: modelSearchInput
+                        Layout.fillWidth: true
+                        placeholderText: "🔍 搜索已配置模型或厂商..."
+                        text: root.modelSearchFilter
+                        onTextChanged: root.modelSearchFilter = text
+                    }
+
+                    // Model List Area
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Repeater {
+                            model: root.filteredModelsList
+                            delegate: StyledRect {
+                                required property var modelData
+                                readonly property bool isCurrent: (root.aiModel === modelData.id)
+
+                                Layout.fillWidth: true
+                                implicitHeight: 44
+                                radius: 10
+                                color: isCurrent ? Theme.primaryContainer : mItemHover.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLowest
+                                border.width: isCurrent ? 1 : 0
+                                border.color: Theme.primary
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingM
+                                    anchors.rightMargin: Theme.spacingM
+                                    spacing: Theme.spacingS
+
+                                    // Provider Avatar Icon
+                                    StyledRect {
+                                        implicitWidth: 28
+                                        implicitHeight: 28
+                                        radius: 14
+                                        color: modelData.color || Theme.primary
+
+                                        DankIcon {
+                                            anchors.centerIn: parent
+                                            name: modelData.icon || "smart_toy"
+                                            size: 15
+                                            color: "#ffffff"
+                                        }
+                                    }
+
+                                    // Text Info
+                                    Column {
+                                        Layout.fillWidth: true
+                                        spacing: 1
+
+                                        StyledText {
+                                            text: modelData.name
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.weight: isCurrent ? Font.Bold : Font.Medium
+                                            color: isCurrent ? Theme.onPrimaryContainer : Theme.surfaceText
+                                            elide: Text.ElideRight
+                                        }
+
+                                        StyledText {
+                                            text: modelData.providerName + " · " + modelData.id
+                                            font.pixelSize: 10
+                                            color: isCurrent ? Theme.primary : Theme.surfaceVariantText
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    // Active Checkmark Indicator
+                                    DankIcon {
+                                        visible: isCurrent
+                                        name: "check_circle"
+                                        size: 16
+                                        color: Theme.primary
+                                    }
+                                }
+
+                                HoverHandler { id: mItemHover }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.selectModel(modelData.id, modelData.providerId)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Divider
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Theme.outlineVariant
+                    }
+
+                    // Quick Add Model to Active Provider
+                    StyledRect {
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        radius: 8
+                        color: addBtnHover.hovered ? Theme.primaryContainer : "transparent"
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 4
+                            DankIcon {
+                                name: root.quickAddExpanded ? "remove_circle_outline" : "add_circle_outline"
+                                size: 15
+                                color: Theme.primary
+                            }
+                            StyledText {
+                                text: root.quickAddExpanded ? "收起快捷添加" : "➕ 为当前服务商添加模型"
+                                font.pixelSize: Theme.fontSizeSmall * 0.9
+                                font.weight: Font.Medium
+                                color: Theme.primary
+                            }
+                        }
+
+                        HoverHandler { id: addBtnHover }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.quickAddExpanded = !root.quickAddExpanded
+                        }
+                    }
+
+                    // Inline Quick Add Card
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: root.quickAddExpanded
+                        spacing: Theme.spacingXS
+
+                        DankTextField {
+                            id: newModelIdField
+                            Layout.fillWidth: true
+                            placeholderText: "输入模型 ID (如 deepseek-v3 / qwen-max)"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.spacingS
+
+                            StyledRect {
+                                Layout.fillWidth: true
+                                implicitHeight: 28
+                                radius: 6
+                                color: Theme.primary
+
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    text: "添加并立即选用"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                    color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        var mId = newModelIdField.text.trim()
+                                        if (mId) {
+                                            var script = root.providerScriptPath || "provider-manager"
+                                            quickAddProc.command = [script, "add-model", root.activeProviderId, mId, mId]
+                                            quickAddProc.running = true
+                                            newModelIdField.text = ""
+                                            root.quickAddExpanded = false
+                                            root.selectModel(mId, root.activeProviderId)
+                                        }
+                                    }
+                                }
+                            }
+
+                            StyledRect {
+                                implicitWidth: 60
+                                implicitHeight: 28
+                                radius: 6
+                                color: Theme.surfaceContainerHigh
+
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    text: "取消"
+                                    font.pixelSize: 11
+                                    color: Theme.surfaceText
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.quickAddExpanded = false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Process {
+                id: quickAddProc
+                command: []
+                running: false
+                stdout: SplitParser {
+                    onRead: (line) => {
+                        root.loadProvidersConfig()
+                    }
+                }
+            }
+
             // Slide-out Session Drawer
             SessionDrawer {
                 id: sessionDrawer
@@ -1063,6 +1524,9 @@ StyledRect {
                                 } else if (root.showDrawer) {
                                     event.accepted = true
                                     root.showDrawer = false
+                                } else if (root.showModelMenu) {
+                                    event.accepted = true
+                                    root.showModelMenu = false
                                 }
                             }
                         }

@@ -40,14 +40,19 @@ StyledRect {
 
         stdout: StdioCollector {
             id: sessionCollector
-            onDataChanged: {
+            onStreamFinished: {
                 if (sessionProc.action === "list") {
                     try {
-                        var data = JSON.parse(value.trim())
-                        if (Array.isArray(data)) {
-                            root.sessionsList = data
+                        var raw = (text || "").trim()
+                        if (raw) {
+                            var data = JSON.parse(raw)
+                            if (Array.isArray(data)) {
+                                root.sessionsList = data
+                            }
                         }
-                    } catch(e) {}
+                    } catch(e) {
+                        console.warn("[dankCalendarAgenda] parse session list failed:", e)
+                    }
                 }
             }
         }
@@ -55,9 +60,11 @@ StyledRect {
         onExited: (code) => {
             if (code === 0 && sessionProc.action === "list") {
                 try {
-                    var data = JSON.parse(sessionCollector.value.trim())
-                    if (Array.isArray(data)) {
-                        root.sessionsList = data
+                    if (sessionCollector.text) {
+                        var data = JSON.parse(sessionCollector.text.trim())
+                        if (Array.isArray(data)) {
+                            root.sessionsList = data
+                        }
                     }
                 } catch(e) {}
             } else if (sessionProc.action === "delete" || sessionProc.action === "clear") {
@@ -67,14 +74,16 @@ StyledRect {
     }
 
     function refreshSessions() {
-        var script = sessionScriptPath || "session-manager"
+        var script = sessionScriptPath || Qt.resolvedUrl("../../session-manager").toString().replace(/^file:\/\//, "")
+        sessionProc.running = false
         sessionProc.action = "list"
         sessionProc.command = [script, "list"]
         sessionProc.running = true
     }
 
     function deleteSession(id) {
-        var script = sessionScriptPath || "session-manager"
+        var script = sessionScriptPath || Qt.resolvedUrl("../../session-manager").toString().replace(/^file:\/\//, "")
+        sessionProc.running = false
         sessionProc.action = "delete"
         sessionProc.command = [script, "delete", id]
         sessionProc.running = true
@@ -82,7 +91,8 @@ StyledRect {
     }
 
     function clearAllSessions() {
-        var script = sessionScriptPath || "session-manager"
+        var script = sessionScriptPath || Qt.resolvedUrl("../../session-manager").toString().replace(/^file:\/\//, "")
+        sessionProc.running = false
         sessionProc.action = "clear"
         sessionProc.command = [script, "clear"]
         sessionProc.running = true
@@ -157,6 +167,17 @@ StyledRect {
                        ? Theme.primaryContainer 
                        : sHover.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLow
 
+                HoverHandler { id: sHover }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.sessionSelected(modelData.id)
+                        root.closeRequested()
+                    }
+                }
+
                 RowLayout {
                     id: sRow
                     anchors.fill: parent
@@ -212,17 +233,6 @@ StyledRect {
                                 root.deleteSession(modelData.id)
                             }
                         }
-                    }
-                }
-
-                HoverHandler { id: sHover }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    z: -1
-                    onClicked: {
-                        root.sessionSelected(modelData.id)
-                        root.closeRequested()
                     }
                 }
             }

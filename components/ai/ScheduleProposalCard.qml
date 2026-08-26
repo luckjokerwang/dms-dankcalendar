@@ -31,9 +31,11 @@ StyledRect {
         running: false
 
         stdout: StdioCollector {
-            onDataChanged: {
+            id: batchCollector
+            onStreamFinished: {
+                var raw = (text || "").trim()
                 try {
-                    var res = JSON.parse(value.trim())
+                    var res = JSON.parse(raw)
                     if (res.status === "ok" || res.createdEvents > 0 || res.createdTasks > 0) {
                         root.isCommitted = true
                         root.resultMessage = "✓ 成功添加 " + (res.createdEvents || 0) + " 项日程, " + (res.createdTasks || 0) + " 项待办"
@@ -80,7 +82,8 @@ StyledRect {
             tasks: finalTasks
         }
 
-        var script = batchScriptPath || "batch-create-items"
+        var script = batchScriptPath || Qt.resolvedUrl("../../batch-create-items").toString().replace(/^file:\/\//, "")
+        batchProcess.running = false
         batchProcess.command = [script, JSON.stringify(payload)]
         batchProcess.running = true
     }
