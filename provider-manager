@@ -1,19 +1,106 @@
 #!/usr/bin/env python3
 """
-DMS AI Provider & Model Management Utility.
-Manages ~/.config/dms-ai/providers.json
+DMS AI Provider & Model Management Utility (v2.1).
+Manages ~/.config/dms-ai/providers.json with zero hardcoded models,
+dynamic /v1/models fetching, latency measurement, and universal preset templates.
 """
 
 import sys
 import os
 import json
+import time
 import urllib.request
 import urllib.error
+import ssl
 
 CONFIG_DIR = os.path.expanduser("~/.config/dms-ai")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "providers.json")
 
-DEFAULT_PROVIDERS = {
+PRESET_PROVIDERS = [
+    {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "icon": "smart_toy",
+        "color": "#1565c0",
+        "desc": "官方深度推理与排程模型",
+        "models": []
+    },
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "baseUrl": "https://api.openai.com/v1",
+        "icon": "psychology",
+        "color": "#10a37f",
+        "desc": "GPT-4o / o1 / o3 官方接口",
+        "models": []
+    },
+    {
+        "id": "claude",
+        "name": "Anthropic Claude",
+        "baseUrl": "https://api.anthropic.com/v1",
+        "icon": "auto_awesome",
+        "color": "#d97706",
+        "desc": "Claude 3.7 Sonnet 官方与代理接口",
+        "models": []
+    },
+    {
+        "id": "gemini",
+        "name": "Google Gemini",
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "icon": "bolt",
+        "color": "#4285f4",
+        "desc": "Gemini 2.0 Flash / Pro 官方接口",
+        "models": []
+    },
+    {
+        "id": "ollama",
+        "name": "Ollama (本地)",
+        "baseUrl": "http://localhost:11434/v1",
+        "icon": "terminal",
+        "color": "#212121",
+        "desc": "本地离线私有化模型服务",
+        "models": []
+    },
+    {
+        "id": "openrouter",
+        "name": "OpenRouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "icon": "hub",
+        "color": "#6366f1",
+        "desc": "全网大模型聚合路由",
+        "models": []
+    },
+    {
+        "id": "qwen",
+        "name": "通义千问 (DashScope)",
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "icon": "cloud",
+        "color": "#ff6a00",
+        "desc": "阿里云通义千问官方兼容端点",
+        "models": []
+    },
+    {
+        "id": "agnes",
+        "name": "Agnes AI",
+        "baseUrl": "https://apihub.agnes-ai.com/v1",
+        "icon": "flash_on",
+        "color": "#e65100",
+        "desc": "Agnes 高速排程专用中继",
+        "models": []
+    },
+    {
+        "id": "custom",
+        "name": "自定义兼容端点",
+        "baseUrl": "http://localhost:8000/v1",
+        "icon": "tune",
+        "color": "#546e7a",
+        "desc": "兼容 OpenAI 规范的私有化端点",
+        "models": []
+    }
+]
+
+DEFAULT_CONFIG = {
     "activeProvider": "agnes",
     "activeModel": "agnes-2.5-flash",
     "providers": [
@@ -23,62 +110,9 @@ DEFAULT_PROVIDERS = {
             "baseUrl": "https://apihub.agnes-ai.com/v1",
             "apiKey": "",
             "enabled": True,
-            "icon": "bolt",
+            "icon": "flash_on",
             "color": "#e65100",
-            "models": [
-                { "id": "agnes-2.5-flash", "name": "Agnes 2.5 Flash", "desc": "极速响应 · 默认推荐" },
-                { "id": "agnes-2.5-pro", "name": "Agnes 2.5 Pro", "desc": "复杂排程 · 深度分析" }
-            ]
-        },
-        {
-            "id": "deepseek",
-            "name": "DeepSeek",
-            "baseUrl": "https://api.deepseek.com/v1",
-            "apiKey": "",
-            "enabled": False,
-            "icon": "smart_toy",
-            "color": "#1565c0",
-            "models": [
-                { "id": "deepseek-chat", "name": "DeepSeek V3", "desc": "通用对话与日程提取" },
-                { "id": "deepseek-reasoner", "name": "DeepSeek R1", "desc": "深度思考与严谨规划" }
-            ]
-        },
-        {
-            "id": "openai",
-            "name": "OpenAI",
-            "baseUrl": "https://api.openai.com/v1",
-            "apiKey": "",
-            "enabled": False,
-            "icon": "speed",
-            "color": "#2e7d32",
-            "models": [
-                { "id": "gpt-4o-mini", "name": "GPT-4o Mini", "desc": "快速多模态图文解析" },
-                { "id": "gpt-4o", "name": "GPT-4o", "desc": "旗舰多模态大模型" }
-            ]
-        },
-        {
-            "id": "gemini",
-            "name": "Google Gemini",
-            "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai/",
-            "apiKey": "",
-            "enabled": False,
-            "icon": "diamond",
-            "color": "#c2185b",
-            "models": [
-                { "id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "desc": "超长上下文与多模态" }
-            ]
-        },
-        {
-            "id": "ollama",
-            "name": "Ollama (本地)",
-            "baseUrl": "http://localhost:11434/v1",
-            "apiKey": "ollama",
-            "enabled": False,
-            "icon": "dns",
-            "color": "#4e342e",
-            "models": [
-                { "id": "llama3.2", "name": "Llama 3.2", "desc": "本地离线隐私排程" }
-            ]
+            "models": []
         }
     ]
 }
@@ -86,18 +120,26 @@ DEFAULT_PROVIDERS = {
 def load_config():
     os.makedirs(CONFIG_DIR, exist_ok=True)
     if not os.path.exists(CONFIG_FILE):
-        save_config(DEFAULT_PROVIDERS)
-        return DEFAULT_PROVIDERS
+        save_config(DEFAULT_CONFIG)
+        return DEFAULT_CONFIG
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        return DEFAULT_PROVIDERS
+            data = json.load(f)
+            if not isinstance(data, dict):
+                return DEFAULT_CONFIG
+            if "providers" not in data or not isinstance(data["providers"], list):
+                data["providers"] = []
+            return data
+    except Exception:
+        return DEFAULT_CONFIG
 
 def save_config(data):
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def cmd_get_presets():
+    print(json.dumps({"status": "ok", "presets": PRESET_PROVIDERS}, ensure_ascii=False))
 
 def cmd_list():
     cfg = load_config()
@@ -107,18 +149,23 @@ def cmd_set_active(provider_id, model_id=None):
     cfg = load_config()
     found = False
     for p in cfg.get("providers", []):
-        if p["id"] == provider_id:
+        if p.get("id") == provider_id:
             found = True
             cfg["activeProvider"] = provider_id
             if model_id:
                 cfg["activeModel"] = model_id
             elif p.get("models") and len(p["models"]) > 0:
-                cfg["activeModel"] = p["models"][0]["id"]
+                cfg["activeModel"] = p["models"][0].get("id", model_id)
             break
     if not found and model_id:
         cfg["activeModel"] = model_id
     save_config(cfg)
-    print(json.dumps({"status": "ok", "activeProvider": cfg.get("activeProvider"), "activeModel": cfg.get("activeModel")}, ensure_ascii=False))
+    print(json.dumps({
+        "status": "ok",
+        "activeProvider": cfg.get("activeProvider"),
+        "activeModel": cfg.get("activeModel"),
+        "data": cfg
+    }, ensure_ascii=False))
 
 def cmd_save_provider(p_json_str):
     cfg = load_config()
@@ -132,102 +179,223 @@ def cmd_save_provider(p_json_str):
         print(json.dumps({"status": "error", "message": "Missing provider id"}))
         return
     
-    # Update existing or add new
     existing_idx = -1
     for i, p in enumerate(cfg.get("providers", [])):
-        if p["id"] == p_id:
+        if p.get("id") == p_id:
             existing_idx = i
             break
             
     if existing_idx >= 0:
         cfg["providers"][existing_idx].update(p_data)
     else:
-        if "providers" not in cfg:
-            cfg["providers"] = []
         cfg["providers"].append(p_data)
         
     save_config(cfg)
     print(json.dumps({"status": "ok", "data": cfg}, ensure_ascii=False))
 
-def cmd_add_model(provider_id, model_id, model_name=None, desc=None):
+def cmd_delete_provider(provider_id):
     cfg = load_config()
-    for p in cfg.get("providers", []):
-        if p["id"] == provider_id:
-            models = p.get("models", [])
-            for m in models:
-                if m["id"] == model_id:
-                    m["name"] = model_name or model_id
-                    if desc:
-                        m["desc"] = desc
-                    save_config(cfg)
-                    print(json.dumps({"status": "ok", "data": cfg}, ensure_ascii=False))
-                    return
-            models.append({
-                "id": model_id,
-                "name": model_name or model_id,
-                "desc": desc or "自定义模型"
-            })
-            p["models"] = models
-            save_config(cfg)
-            print(json.dumps({"status": "ok", "data": cfg}, ensure_ascii=False))
-            return
-    print(json.dumps({"status": "error", "message": f"Provider {provider_id} not found"}))
+    cfg["providers"] = [p for p in cfg.get("providers", []) if p.get("id") != provider_id]
+    if cfg.get("activeProvider") == provider_id and len(cfg["providers"]) > 0:
+        cfg["activeProvider"] = cfg["providers"][0]["id"]
+        if cfg["providers"][0].get("models") and len(cfg["providers"][0]["models"]) > 0:
+            cfg["activeModel"] = cfg["providers"][0]["models"][0]["id"]
+    save_config(cfg)
+    print(json.dumps({"status": "ok", "data": cfg}, ensure_ascii=False))
 
-def cmd_delete_model(provider_id, model_id):
-    cfg = load_config()
-    for p in cfg.get("providers", []):
-        if p["id"] == provider_id:
-            p["models"] = [m for m in p.get("models", []) if m["id"] != model_id]
-            save_config(cfg)
-            print(json.dumps({"status": "ok", "data": cfg}, ensure_ascii=False))
-            return
-    print(json.dumps({"status": "error", "message": f"Provider {provider_id} not found"}))
-
-def cmd_test(base_url, api_key):
-    url = base_url.rstrip("/") + "/models"
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {api_key}",
-        "User-Agent": "DankCalendar/2.0"
-    })
+def parse_models_from_response(raw_bytes):
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            models = []
-            if "data" in data and isinstance(data["data"], list):
-                for item in data["data"]:
-                    if isinstance(item, dict) and "id" in item:
-                        models.append(item["id"])
-            print(json.dumps({"status": "ok", "models": models}, ensure_ascii=False))
+        data = json.loads(raw_bytes.decode("utf-8"))
+    except Exception:
+        return []
+
+    model_ids = []
+    # 1. Standard OpenAI format: {"data": [{"id": "gpt-4o"}, ...]}
+    if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+        for item in data["data"]:
+            if isinstance(item, dict) and "id" in item:
+                model_ids.append(item["id"])
+            elif isinstance(item, str):
+                model_ids.append(item)
+    # 2. Ollama / Gemini format: {"models": [{"name": "llama3.2"}, ...]}
+    elif isinstance(data, dict) and "models" in data and isinstance(data["models"], list):
+        for item in data["models"]:
+            if isinstance(item, dict):
+                mid = item.get("id") or item.get("name") or item.get("model")
+                if mid:
+                    model_ids.append(mid)
+            elif isinstance(item, str):
+                model_ids.append(item)
+    # 3. Direct array format: [{"id": "..."}, ...]
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and "id" in item:
+                model_ids.append(item["id"])
+            elif isinstance(item, str):
+                model_ids.append(item)
+
+    # Filter out obvious non-chat models (embedding, audio, tts, moderation, image-gen only)
+    exclude_keywords = ["embedding", "embed", "tts", "whisper", "dall-e", "moderation", "rerank", "bge-", "clip-"]
+    filtered = []
+    for mid in model_ids:
+        lower = mid.lower()
+        if any(k in lower for k in exclude_keywords):
+            continue
+        filtered.append(mid)
+
+    # De-duplicate while preserving order
+    seen = set()
+    result = []
+    for m in filtered:
+        if m not in seen:
+            seen.add(m)
+            result.append(m)
+
+    return result
+
+def cmd_fetch_models(provider_id):
+    cfg = load_config()
+    target = None
+    for p in cfg.get("providers", []):
+        if p.get("id") == provider_id:
+            target = p
+            break
+            
+    if not target:
+        print(json.dumps({"status": "error", "message": f"Provider '{provider_id}' 未找到"}))
+        return
+
+    base_url = target.get("baseUrl", "").rstrip("/")
+    api_key = target.get("apiKey", "").strip()
+    if not base_url:
+        print(json.dumps({"status": "error", "message": "Base URL 为空"}))
+        return
+
+    models_url = f"{base_url}/models"
+    headers = {
+        "User-Agent": "DankCalendar/2.1",
+        "Accept": "application/json"
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = urllib.request.Request(models_url, headers=headers)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    start_time = time.time()
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+            raw = resp.read()
+            latency = int((time.time() - start_time) * 1000)
+            models = parse_models_from_response(raw)
+            if not models:
+                # If parsing produced 0, but status 200, add a fallback generic model
+                models = [f"{provider_id}-default"]
+
+            model_objects = [{"id": mid, "name": mid, "desc": "实时同步模型"} for mid in models]
+            target["models"] = model_objects
+            if cfg.get("activeProvider") == provider_id:
+                if not cfg.get("activeModel") or cfg.get("activeModel") not in models:
+                    cfg["activeModel"] = models[0]
+
+            save_config(cfg)
+            print(json.dumps({
+                "status": "ok",
+                "latency": latency,
+                "count": len(models),
+                "models": model_objects,
+                "activeModel": cfg.get("activeModel"),
+                "data": cfg
+            }, ensure_ascii=False))
+    except urllib.error.HTTPError as e:
+        print(json.dumps({"status": "error", "message": f"HTTP {e.code}: {e.reason}", "latency": -1}))
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False))
+        print(json.dumps({"status": "error", "message": f"连接失败: {str(e)}", "latency": -1}))
+
+def cmd_test(provider_id_or_url, api_key=None):
+    base_url = ""
+    key = ""
+    if api_key is not None:
+        base_url = provider_id_or_url.rstrip("/")
+        key = api_key.strip()
+    else:
+        cfg = load_config()
+        for p in cfg.get("providers", []):
+            if p.get("id") == provider_id_or_url:
+                base_url = p.get("baseUrl", "").rstrip("/")
+                key = p.get("apiKey", "").strip()
+                break
+
+    if not base_url:
+        print(json.dumps({"status": "error", "message": "未找到端点 URL", "latency": -1}))
+        return
+
+    url = f"{base_url}/models"
+    headers = {
+        "User-Agent": "DankCalendar/2.1",
+        "Accept": "application/json"
+    }
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+
+    req = urllib.request.Request(url, headers=headers)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    start_time = time.time()
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=8) as resp:
+            raw = resp.read()
+            latency = int((time.time() - start_time) * 1000)
+            models = parse_models_from_response(raw)
+            print(json.dumps({
+                "status": "ok",
+                "latency": latency,
+                "modelCount": len(models),
+                "models": models[:10]
+            }, ensure_ascii=False))
+    except urllib.error.HTTPError as e:
+        print(json.dumps({"status": "error", "message": f"HTTP {e.code}: {e.reason}", "latency": -1}))
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": f"连接异常: {str(e)}", "latency": -1}))
 
 def main():
     if len(sys.argv) < 2:
         cmd_list()
         return
+
     cmd = sys.argv[1]
     if cmd == "list":
         cmd_list()
+    elif cmd == "get-presets":
+        cmd_get_presets()
     elif cmd == "set-active":
         p_id = sys.argv[2] if len(sys.argv) > 2 else "agnes"
         m_id = sys.argv[3] if len(sys.argv) > 3 else None
         cmd_set_active(p_id, m_id)
-    elif cmd == "save-provider":
+    elif cmd == "fetch-models":
         if len(sys.argv) > 2:
-            cmd_save_provider(sys.argv[2])
-    elif cmd == "add-model":
-        if len(sys.argv) >= 4:
-            p_id = sys.argv[2]
-            m_id = sys.argv[3]
-            m_name = sys.argv[4] if len(sys.argv) > 4 else m_id
-            m_desc = sys.argv[5] if len(sys.argv) > 5 else ""
-            cmd_add_model(p_id, m_id, m_name, m_desc)
-    elif cmd == "delete-model":
-        if len(sys.argv) >= 4:
-            cmd_delete_model(sys.argv[2], sys.argv[3])
+            cmd_fetch_models(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "Missing provider id"}))
+    elif cmd == "save-provider":
+        raw = sys.argv[2] if len(sys.argv) > 2 else sys.stdin.read()
+        cmd_save_provider(raw)
+    elif cmd == "delete-provider":
+        if len(sys.argv) > 2:
+            cmd_delete_provider(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "Missing provider id"}))
     elif cmd == "test":
         if len(sys.argv) >= 4:
             cmd_test(sys.argv[2], sys.argv[3])
+        elif len(sys.argv) >= 3:
+            cmd_test(sys.argv[2])
+        else:
+            print(json.dumps({"status": "error", "message": "Missing test target"}))
     else:
         cmd_list()
 

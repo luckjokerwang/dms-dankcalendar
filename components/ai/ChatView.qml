@@ -55,6 +55,7 @@ StyledRect {
                 try {
                     var res = JSON.parse(trimmed)
                     if (res.status === "ok" && res.data) {
+                        root.providersConfig = res.data
                         root.configuredProviders = res.data.providers || []
                         if (res.data.activeModel) {
                             root.aiModel = res.data.activeModel
@@ -65,6 +66,116 @@ StyledRect {
                     }
                 } catch(e) {}
             }
+        }
+    }
+
+    property var providersConfig: null
+    property bool showCommandPalette: false
+
+    // Direct In-Chat Provider Modal State
+    property bool showInChatProviderModal: false
+    property var inChatProviderData: null
+    property string inChatApiKey: ""
+    property string inChatBaseUrl: ""
+    property bool inChatIsTesting: false
+    property string inChatStatusText: ""
+
+    function openInChatProviderConfig(pId) {
+        var prov = null
+        if (providersConfig && providersConfig.providers) {
+            for (var i = 0; i < providersConfig.providers.length; i++) {
+                if (providersConfig.providers[i].id === pId) {
+                    prov = providersConfig.providers[i]
+                    break
+                }
+            }
+        }
+        if (!prov) {
+            prov = {
+                id: pId,
+                name: pId,
+                baseUrl: "https://api." + pId + ".com/v1",
+                apiKey: "",
+                enabled: true,
+                models: []
+            }
+        }
+        inChatProviderData = prov
+        inChatApiKey = prov.apiKey || ""
+        inChatBaseUrl = prov.baseUrl || ""
+        inChatStatusText = ""
+        showInChatProviderModal = true
+    }
+
+    function saveAndSyncInChatProvider() {
+        if (!inChatProviderData) return
+        var key = inChatApiKey.trim()
+        var url = inChatBaseUrl.trim()
+        if (!url) {
+            inChatStatusText = "❌ API 地址不能为空"
+            return
+        }
+
+        var updated = Object.assign({}, inChatProviderData)
+        updated.baseUrl = url
+        updated.apiKey = key
+        updated.enabled = true
+
+        var script = providerScriptPath || "provider-manager"
+        saveInChatProc.command = [script, "save-provider", JSON.stringify(updated)]
+        saveInChatProc.running = true
+
+        inChatIsTesting = true
+        inChatStatusText = "⏳ 正在保存并连接端点动态拉取模型..."
+        fetchInChatProc.command = [script, "fetch-models", inChatProviderData.id]
+        fetchInChatProc.running = true
+    }
+
+    Process {
+        id: saveInChatProc
+        command: []
+        running: false
+    }
+
+    Process {
+        id: fetchInChatProc
+        command: []
+        running: false
+        stdout: SplitParser {
+            onRead: (line) => {
+                var trimmed = line.trim()
+                if (!trimmed) return
+                try {
+                    var res = JSON.parse(trimmed)
+                    if (res.status === "ok") {
+                        root.inChatStatusText = "🟢 同步成功 (" + (res.latency || 0) + "ms) · 获得 " + (res.count || 0) + " 个模型"
+                        root.activeProviderId = root.inChatProviderData.id
+                        if (res.models && res.models.length > 0) {
+                            root.aiModel = res.models[0].id
+                        }
+                        root.loadProvidersConfig()
+                        var okMsgs = root.messages.slice()
+                        okMsgs.push({
+                            role: "system",
+                            content: "✅ 已成功配置服务商 [" + (root.inChatProviderData.name || root.inChatProviderData.id) + "] 并激活模型: " + root.aiModel,
+                            timestamp: new Date().toISOString()
+                        })
+                        root.messages = okMsgs
+                        Qt.callLater(() => {
+                            msgListView.positionViewAtEnd()
+                            root.showInChatProviderModal = false
+                        })
+                    } else {
+                        root.inChatStatusText = "❌ " + (res.message || "连接失败")
+                    }
+                } catch(e) {
+                    root.inChatStatusText = "❌ 解析失败: " + e.message
+                }
+                root.inChatIsTesting = false
+            }
+        }
+        onExited: (code) => {
+            root.inChatIsTesting = false
         }
     }
 
@@ -362,9 +473,21 @@ StyledRect {
         var parts = cmdStr.trim().split(" ")
         var cmd = parts[0].toLowerCase()
 
-        if (cmd === "/new" || cmd === "/clear") {
+        if (cmd === "/new") {
             initNewSession()
             chatInputField.text = ""
+        } else if (cmd === "/clear") {
+            messages = []
+            saveCurrentSessionToDisk()
+            chatInputField.text = ""
+            var clearMsgs = []
+            clearMsgs.push({
+                role: "system",
+                content: "已清空当前会话的消息记录。",
+                timestamp: new Date().toISOString()
+            })
+            messages = clearMsgs
+            Qt.callLater(() => msgListView.positionViewAtEnd())
         } else if (cmd === "/session" || cmd === "/history") {
             showDrawer = !showDrawer
             chatInputField.text = ""
@@ -372,14 +495,19 @@ StyledRect {
             if (parts.length > 1) {
                 selectModel(parts[1].trim())
             } else {
-                showModelMenu = true
+                showCommandPalette = true
+                commandPalette.enterMode("model")
             }
+            chatInputField.text = ""
+        } else if (cmd === "/provider") {
+            showCommandPalette = true
+            commandPalette.enterMode("provider")
             chatInputField.text = ""
         } else if (cmd === "/help") {
             var helpMsgs = messages.slice()
             helpMsgs.push({
                 role: "system",
-                content: "【支持的指令与快捷键】\n• /new 或 /clear : 开启全新排程会话\n• /session : 历史会话管理\n• /model <name> : 切换大模型\n• Ctrl+N : 新建会话\n• Ctrl+H : 打开历史抽屉\n• Ctrl+V : 粘贴剪贴板截图/图片\n• Shift+Enter : 换行\n• Esc : 中止思考或关闭面板",
+                content: "【支持的指令与快捷键】\n• 输入 / 唤出全键盘 Command Palette 指令浮层\n• /model : 上下键快速切换大模型\n• /history : 上下键快速切换历史会话\n• /provider : 快速切换 AI 服务商\n• /new : 开启全新排程会话\n• /clear : 清空当前会话内容\n• Ctrl+N : 新建会话 | Ctrl+H : 历史抽屉 | Ctrl+V : 粘贴截图",
                 timestamp: new Date().toISOString()
             })
             messages = helpMsgs
@@ -410,6 +538,56 @@ StyledRect {
         })
         messages = sysMsgs
         Qt.callLater(() => msgListView.positionViewAtEnd())
+    }
+
+    function selectProvider(pId) {
+        var targetProv = null
+        if (providersConfig && providersConfig.providers) {
+            for (var i = 0; i < providersConfig.providers.length; i++) {
+                if (providersConfig.providers[i].id === pId) {
+                    targetProv = providersConfig.providers[i]
+                    break
+                }
+            }
+        }
+
+        var pName = targetProv ? (targetProv.name || pId) : pId
+        var hasKey = targetProv ? (!!targetProv.apiKey && targetProv.apiKey.trim().length > 0) || pId === "ollama" : false
+        var hasModels = targetProv && targetProv.models && targetProv.models.length > 0
+
+        if (!hasKey) {
+            var warnMsgs = messages.slice()
+            warnMsgs.push({
+                role: "system",
+                content: "⚠️ 服务商 [" + pName + "] 尚未配置 API Key。已为您弹出配置窗口，可直接在下方填写并测试：",
+                providerIdToConfig: pId,
+                timestamp: new Date().toISOString()
+            })
+            messages = warnMsgs
+            Qt.callLater(() => msgListView.positionViewAtEnd())
+            openInChatProviderConfig(pId)
+            return
+        }
+
+        activeProviderId = pId
+        showModelMenu = false
+        var script = providerScriptPath || "provider-manager"
+        setActiveProc.command = [script, "set-active", pId]
+        setActiveProc.running = true
+
+        if (hasModels) {
+            aiModel = targetProv.models[0].id
+        }
+
+        var sysMsgs = messages.slice()
+        sysMsgs.push({
+            role: "system",
+            content: "已切换生效服务商为: " + pName + (aiModel ? (" (模型: " + aiModel + ")") : ""),
+            timestamp: new Date().toISOString()
+        })
+        messages = sysMsgs
+        Qt.callLater(() => msgListView.positionViewAtEnd())
+        loadProvidersConfig()
     }
 
     Process {
@@ -679,9 +857,36 @@ StyledRect {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             root.loadProvidersConfig()
-                            root.showModelMenu = !root.showModelMenu
-                            root.modelSearchFilter = ""
-                            root.quickAddExpanded = false
+                            if (root.showCommandPalette && commandPalette.currentMode === "model") {
+                                root.showCommandPalette = false
+                            } else {
+                                root.showCommandPalette = true
+                                commandPalette.enterMode("model")
+                            }
+                        }
+                    }
+                }
+
+                // Quick Direct Provider Settings Button
+                StyledRect {
+                    implicitWidth: 28
+                    implicitHeight: 28
+                    radius: 8
+                    color: provQuickHover.hovered ? Theme.surfaceContainerHighest : "transparent"
+
+                    DankIcon {
+                        anchors.centerIn: parent
+                        name: "tune"
+                        size: 15
+                        color: Theme.primary
+                    }
+
+                    HoverHandler { id: provQuickHover }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.openInChatProviderConfig(root.activeProviderId)
                         }
                     }
                 }
@@ -853,12 +1058,52 @@ StyledRect {
                     }
 
                     // System message
-                    StyledText {
-                        Layout.alignment: Qt.AlignHCenter
+                    StyledRect {
+                        Layout.fillWidth: true
                         visible: modelData.role === "system"
-                        text: modelData.content || ""
-                        font.pixelSize: Theme.fontSizeSmall * 0.85
-                        color: Theme.surfaceVariantText
+                        implicitHeight: sysCol.implicitHeight + Theme.spacingS * 2
+                        radius: 8
+                        color: (modelData.content && modelData.content.indexOf("⚠️") !== -1) ? Qt.rgba(255/255, 160/255, 0, 0.12) : "transparent"
+                        border.width: (modelData.content && modelData.content.indexOf("⚠️") !== -1) ? 1 : 0
+                        border.color: Qt.rgba(255/255, 160/255, 0, 0.3)
+
+                        ColumnLayout {
+                            id: sysCol
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingS
+                            spacing: 4
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: modelData.content || ""
+                                font.pixelSize: Theme.fontSizeSmall * 0.85
+                                color: (modelData.content && modelData.content.indexOf("⚠️") !== -1) ? "#ffb300" : Theme.surfaceVariantText
+                                wrapMode: Text.WrapAnywhere
+                            }
+
+                            StyledRect {
+                                visible: !!modelData.providerIdToConfig
+                                implicitWidth: cfgBtnText.implicitWidth + 16
+                                implicitHeight: 24
+                                radius: 6
+                                color: Theme.primary
+
+                                StyledText {
+                                    id: cfgBtnText
+                                    anchors.centerIn: parent
+                                    text: "⚙️ 立即在此配置 API Key"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.openInChatProviderConfig(modelData.providerIdToConfig)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -986,278 +1231,7 @@ StyledRect {
                 }
             }
 
-            // Raycast AI / Cherry Studio Style Model Switcher Dialog (ONLY configured models)
-            StyledRect {
-                id: modelMenuPopup
-                visible: root.showModelMenu
-                anchors.top: parent.top
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(parent.width - 16, 320)
-                implicitHeight: modelDialogCol.implicitHeight + Theme.spacingM * 2
-                radius: 16
-                color: Theme.surfaceContainerHighest
-                border.width: 1
-                border.color: Theme.outlineVariant
-                z: 40
 
-                ColumnLayout {
-                    id: modelDialogCol
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingM
-                    spacing: Theme.spacingS
-
-                    // Header
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingS
-
-                        DankIcon {
-                            name: "psychology"
-                            size: 18
-                            color: Theme.primary
-                        }
-
-                        StyledText {
-                            text: "已配置大模型 (Available Models)"
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.weight: Font.Bold
-                            color: Theme.surfaceText
-                        }
-
-                        StyledRect {
-                            implicitWidth: cntTxt.implicitWidth + 8
-                            implicitHeight: 18
-                            radius: 9
-                            color: Theme.surfaceContainerHigh
-                            StyledText {
-                                id: cntTxt
-                                anchors.centerIn: parent
-                                text: root.filteredModelsList.length
-                                font.pixelSize: 10
-                                color: Theme.surfaceVariantText
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        StyledRect {
-                            implicitWidth: 24
-                            implicitHeight: 24
-                            radius: 12
-                            color: closeMenuHover.hovered ? Theme.surfaceContainerHigh : "transparent"
-                            DankIcon {
-                                anchors.centerIn: parent
-                                name: "close"
-                                size: 14
-                                color: Theme.surfaceVariantText
-                            }
-                            HoverHandler { id: closeMenuHover }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.showModelMenu = false
-                            }
-                        }
-                    }
-
-                    // Search Filter Box
-                    DankTextField {
-                        id: modelSearchInput
-                        Layout.fillWidth: true
-                        placeholderText: "🔍 搜索已配置模型或厂商..."
-                        text: root.modelSearchFilter
-                        onTextChanged: root.modelSearchFilter = text
-                    }
-
-                    // Model List Area
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        Repeater {
-                            model: root.filteredModelsList
-                            delegate: StyledRect {
-                                required property var modelData
-                                readonly property bool isCurrent: (root.aiModel === modelData.id)
-
-                                Layout.fillWidth: true
-                                implicitHeight: 44
-                                radius: 10
-                                color: isCurrent ? Theme.primaryContainer : mItemHover.hovered ? Theme.surfaceContainerHigh : Theme.surfaceContainerLowest
-                                border.width: isCurrent ? 1 : 0
-                                border.color: Theme.primary
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Theme.spacingM
-                                    anchors.rightMargin: Theme.spacingM
-                                    spacing: Theme.spacingS
-
-                                    // Provider Avatar Icon
-                                    StyledRect {
-                                        implicitWidth: 28
-                                        implicitHeight: 28
-                                        radius: 14
-                                        color: modelData.color || Theme.primary
-
-                                        DankIcon {
-                                            anchors.centerIn: parent
-                                            name: modelData.icon || "smart_toy"
-                                            size: 15
-                                            color: "#ffffff"
-                                        }
-                                    }
-
-                                    // Text Info
-                                    Column {
-                                        Layout.fillWidth: true
-                                        spacing: 1
-
-                                        StyledText {
-                                            text: modelData.name
-                                            font.pixelSize: Theme.fontSizeSmall
-                                            font.weight: isCurrent ? Font.Bold : Font.Medium
-                                            color: isCurrent ? Theme.onPrimaryContainer : Theme.surfaceText
-                                            elide: Text.ElideRight
-                                        }
-
-                                        StyledText {
-                                            text: modelData.providerName + " · " + modelData.id
-                                            font.pixelSize: 10
-                                            color: isCurrent ? Theme.primary : Theme.surfaceVariantText
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-
-                                    // Active Checkmark Indicator
-                                    DankIcon {
-                                        visible: isCurrent
-                                        name: "check_circle"
-                                        size: 16
-                                        color: Theme.primary
-                                    }
-                                }
-
-                                HoverHandler { id: mItemHover }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        root.selectModel(modelData.id, modelData.providerId)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Divider
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 1
-                        color: Theme.outlineVariant
-                    }
-
-                    // Quick Add Model to Active Provider
-                    StyledRect {
-                        Layout.fillWidth: true
-                        implicitHeight: 30
-                        radius: 8
-                        color: addBtnHover.hovered ? Theme.primaryContainer : "transparent"
-
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            DankIcon {
-                                name: root.quickAddExpanded ? "remove_circle_outline" : "add_circle_outline"
-                                size: 15
-                                color: Theme.primary
-                            }
-                            StyledText {
-                                text: root.quickAddExpanded ? "收起快捷添加" : "➕ 为当前服务商添加模型"
-                                font.pixelSize: Theme.fontSizeSmall * 0.9
-                                font.weight: Font.Medium
-                                color: Theme.primary
-                            }
-                        }
-
-                        HoverHandler { id: addBtnHover }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.quickAddExpanded = !root.quickAddExpanded
-                        }
-                    }
-
-                    // Inline Quick Add Card
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        visible: root.quickAddExpanded
-                        spacing: Theme.spacingXS
-
-                        DankTextField {
-                            id: newModelIdField
-                            Layout.fillWidth: true
-                            placeholderText: "输入模型 ID (如 deepseek-v3 / qwen-max)"
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spacingS
-
-                            StyledRect {
-                                Layout.fillWidth: true
-                                implicitHeight: 28
-                                radius: 6
-                                color: Theme.primary
-
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: "添加并立即选用"
-                                    font.pixelSize: 11
-                                    font.weight: Font.Bold
-                                    color: "#ffffff"
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        var mId = newModelIdField.text.trim()
-                                        if (mId) {
-                                            var script = root.providerScriptPath || "provider-manager"
-                                            quickAddProc.command = [script, "add-model", root.activeProviderId, mId, mId]
-                                            quickAddProc.running = true
-                                            newModelIdField.text = ""
-                                            root.quickAddExpanded = false
-                                            root.selectModel(mId, root.activeProviderId)
-                                        }
-                                    }
-                                }
-                            }
-
-                            StyledRect {
-                                implicitWidth: 60
-                                implicitHeight: 28
-                                radius: 6
-                                color: Theme.surfaceContainerHigh
-
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: "取消"
-                                    font.pixelSize: 11
-                                    color: Theme.surfaceText
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.quickAddExpanded = false
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             Process {
                 id: quickAddProc
@@ -1296,89 +1270,45 @@ StyledRect {
             Layout.fillWidth: true
             implicitHeight: inputCard.implicitHeight
 
-            // Floating Slash Commands Popup Menu
-            StyledRect {
-                id: slashPopup
-                visible: root.filteredCommands.length > 0
+            // Floating OpenCode-Style Hierarchical Command Palette
+            CommandPalette {
+                id: commandPalette
+                visible: root.showCommandPalette
                 anchors.bottom: inputCard.top
                 anchors.bottomMargin: Theme.spacingS
                 anchors.left: parent.left
                 anchors.right: parent.right
-                implicitHeight: slashCol.implicitHeight + Theme.spacingS * 2
-                radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHighest
-                border.width: 1
-                border.color: Theme.outlineVariant
-                z: 10
+                z: 50
 
-                ColumnLayout {
-                    id: slashCol
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingS
-                    spacing: 2
+                sessionList: sessionDrawer.sessionsList
+                providerConfig: root.providersConfig
 
-                    StyledText {
-                        text: "快捷指令 (按 ↑/↓ 选择，Enter/Tab 执行):"
-                        font.pixelSize: 10
-                        font.weight: Font.Bold
-                        color: Theme.surfaceVariantText
-                        Layout.leftMargin: Theme.spacingS
-                    }
+                onSelectSession: (sId) => {
+                    root.loadSession(sId)
+                    chatInputField.text = ""
+                    root.showCommandPalette = false
+                }
 
-                    Repeater {
-                        model: root.filteredCommands
-                        delegate: StyledRect {
-                            required property var modelData
-                            required property int index
-                            readonly property bool isSelected: (root.selectedSlashIndex === index || cmdHover.hovered)
-                            Layout.fillWidth: true
-                            implicitHeight: 30
-                            radius: 8
-                            color: isSelected ? Theme.primary : "transparent"
+                onSelectModel: (mId, pId) => {
+                    root.selectModel(mId, pId)
+                    chatInputField.text = ""
+                    root.showCommandPalette = false
+                }
 
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingM
-                                anchors.rightMargin: Theme.spacingM
-                                spacing: Theme.spacingS
+                onSelectProvider: (pId) => {
+                    root.selectProvider(pId)
+                    chatInputField.text = ""
+                    root.showCommandPalette = false
+                }
 
-                                DankIcon {
-                                    name: modelData.icon || "terminal"
-                                    size: 15
-                                    color: isSelected ? "#ffffff" : Theme.primary
-                                }
+                onExecuteCommand: (cmd) => {
+                    root.executeCommand(cmd)
+                    chatInputField.text = ""
+                    root.showCommandPalette = false
+                }
 
-                                StyledText {
-                                    text: modelData.cmd
-                                    font.pixelSize: Theme.fontSizeSmall
-                                    font.weight: Font.Bold
-                                    color: isSelected ? "#ffffff" : Theme.surfaceText
-                                }
-
-                                StyledText {
-                                    Layout.fillWidth: true
-                                    text: "— " + modelData.desc
-                                    font.pixelSize: Theme.fontSizeSmall * 0.85
-                                    color: isSelected ? Qt.rgba(1, 1, 1, 0.85) : Theme.surfaceVariantText
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            HoverHandler {
-                                id: cmdHover
-                                onHoveredChanged: {
-                                    if (hovered) root.selectedSlashIndex = index
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.executeCommand(modelData.cmd)
-                                }
-                            }
-                        }
-                    }
+                onCloseRequested: {
+                    root.showCommandPalette = false
                 }
             }
 
@@ -1507,7 +1437,22 @@ StyledRect {
                                 text = ""
                                 return
                             }
-                            root.updateSlashSuggestions(text)
+
+                            if (text.startsWith("/")) {
+                                root.showCommandPalette = true
+                                var clean = text.substring(1).trim()
+                                if (clean.startsWith("history")) {
+                                    commandPalette.enterMode("history", clean.substring(7).trim())
+                                } else if (clean.startsWith("model")) {
+                                    commandPalette.enterMode("model", clean.substring(5).trim())
+                                } else if (clean.startsWith("provider")) {
+                                    commandPalette.enterMode("provider", clean.substring(8).trim())
+                                } else {
+                                    commandPalette.enterMode("root", clean)
+                                }
+                            } else {
+                                root.showCommandPalette = false
+                            }
                         }
 
                         Keys.onPressed: (event) => {
@@ -1517,24 +1462,8 @@ StyledRect {
                                 return
                             }
 
-                            if (root.filteredCommands.length > 0) {
-                                if (event.key === Qt.Key_Up) {
-                                    event.accepted = true
-                                    root.selectedSlashIndex = (root.selectedSlashIndex - 1 + root.filteredCommands.length) % root.filteredCommands.length
-                                    return
-                                } else if (event.key === Qt.Key_Down) {
-                                    event.accepted = true
-                                    root.selectedSlashIndex = (root.selectedSlashIndex + 1) % root.filteredCommands.length
-                                    return
-                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Tab) {
-                                    event.accepted = true
-                                    if (root.selectedSlashIndex >= 0 && root.selectedSlashIndex < root.filteredCommands.length) {
-                                        root.executeCommand(root.filteredCommands[root.selectedSlashIndex].cmd)
-                                    }
-                                    return
-                                } else if (event.key === Qt.Key_Escape) {
-                                    event.accepted = true
-                                    root.filteredCommands = []
+                            if (root.showCommandPalette) {
+                                if (commandPalette.handleKey(event)) {
                                     return
                                 }
                             }

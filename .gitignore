@@ -1,4 +1,32 @@
+# 本地数据与设计任务
 data/
-__pycache__/
-*.pyc
+tasks/
 *.metadata.json
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Qt / QML 字节码缓存
+*.qmlc
+*.jsc
+
+# 编辑器与系统
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.DS_Store
+
+# 临时与环境配置
+*.log
+tmp/
+.tmp/
+.env
+.env.*
+
+# Agent
+.agents/ 

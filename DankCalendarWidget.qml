@@ -223,6 +223,10 @@ PluginComponent {
             if (!isActionRunning && taskActionQueue.length === 0) {
                 // When ALL queued actions have finished, sync with dcal
                 root.fetchTasks();
+                if (!agendaProcess.running)
+                    agendaProcess.running = true;
+                if (!fetchProcess.running)
+                    fetchProcess.running = true;
             }
             return;
         }
@@ -355,6 +359,26 @@ PluginComponent {
 
         // Background write via sequential queue
         queueTaskAction("dcal ipc tasks.delete id=" + taskId);
+    }
+
+    function deleteEvent(ev) {
+        if (!ev || !ev.id)
+            return;
+
+        // Optimistic UI Update: instantly remove from agenda events list
+        if (ev.recurringId && ev.start) {
+            root.agendaEvents = root.agendaEvents.filter(e => !(e.id === ev.id && e.start === ev.start));
+        } else {
+            root.agendaEvents = root.agendaEvents.filter(e => e.id !== ev.id);
+        }
+        root.agendaModel = root.buildAgenda(root.agendaEvents);
+
+        // Background write via sequential queue
+        var cmd = "dcal ipc events.delete id=" + ev.id;
+        if (ev.recurringId && ev.start) {
+            cmd += " occurrenceStart=" + ev.start;
+        }
+        queueTaskAction(cmd);
     }
 
     function refreshAll() {
@@ -1459,56 +1483,98 @@ PluginComponent {
                                         anchors.verticalCenter: parent.verticalCenter
                                         spacing: Theme.spacingS
 
-                                        Rectangle {
-                                            width: 4
-                                            height: 34
-                                            radius: 2
-                                            color: agendaRow.phase === "now" ? "#66BB6A" : (agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.primary)
-                                            opacity: agendaRow.phase === "past" ? 0.4 : 1
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Column {
-                                            width: parent.width - 4 - Theme.spacingS * 2
-                                            spacing: 1
+                                        // Left Clickable Content Area
+                                        Item {
+                                            id: eventContentItem
+                                            width: parent.width - 28 - Theme.spacingS
+                                            height: 44
                                             anchors.verticalCenter: parent.verticalCenter
 
-                                            StyledText {
-                                                width: parent.width
-                                                text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.summary || "(untitled)") : ""
-                                                font.pixelSize: Theme.fontSizeSmall
-                                                font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
-                                                color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
-                                                elide: Text.ElideRight
-                                                maximumLineCount: 1
-                                            }
+                                            Row {
+                                                anchors.fill: parent
+                                                spacing: Theme.spacingS
 
-                                            StyledText {
-                                                width: parent.width
-                                                text: {
-                                                    if (agendaRow.modelData.kind !== "event")
-                                                        return "";
-
-                                                    var ev = agendaRow.modelData.ev;
-                                                    return root.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
+                                                Rectangle {
+                                                    width: 4
+                                                    height: 34
+                                                    radius: 2
+                                                    color: agendaRow.phase === "now" ? "#66BB6A" : (agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.primary)
+                                                    opacity: agendaRow.phase === "past" ? 0.4 : 1
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                 }
-                                                font.pixelSize: Theme.fontSizeSmall
-                                                color: agendaRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
-                                                elide: Text.ElideRight
-                                                maximumLineCount: 1
+
+                                                Column {
+                                                    width: parent.width - 4 - Theme.spacingS
+                                                    spacing: 1
+                                                    anchors.verticalCenter: parent.verticalCenter
+
+                                                    StyledText {
+                                                        width: parent.width
+                                                        text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.summary || "(untitled)") : ""
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
+                                                        color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
+                                                        elide: Text.ElideRight
+                                                        maximumLineCount: 1
+                                                    }
+
+                                                    StyledText {
+                                                        width: parent.width
+                                                        text: {
+                                                            if (agendaRow.modelData.kind !== "event")
+                                                                return "";
+
+                                                            var ev = agendaRow.modelData.ev;
+                                                            return root.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
+                                                        }
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        color: agendaRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
+                                                        elide: Text.ElideRight
+                                                        maximumLineCount: 1
+                                                    }
+
+                                                }
+
+                                            }
+
+                                            TapHandler {
+                                                onTapped: {
+                                                    root.openEvent(agendaRow.modelData.ev);
+                                                    if (popout.closePopout)
+                                                        popout.closePopout();
+
+                                                }
                                             }
 
                                         }
 
-                                    }
+                                        // Delete Action Button (Task-style)
+                                        Rectangle {
+                                            width: 28
+                                            height: 28
+                                            radius: 14
+                                            color: delEvMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.15) : "transparent"
+                                            visible: rowHover.hovered || delEvMouse.containsMouse
+                                            anchors.verticalCenter: parent.verticalCenter
 
-                                    TapHandler {
-                                        onTapped: {
-                                            root.openEvent(agendaRow.modelData.ev);
-                                            if (popout.closePopout)
-                                                popout.closePopout();
+                                            DankIcon {
+                                                name: "delete"
+                                                size: 16
+                                                color: delEvMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
+                                                anchors.centerIn: parent
+                                            }
 
+                                            MouseArea {
+                                                id: delEvMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    root.deleteEvent(agendaRow.modelData.ev);
+                                                }
+                                            }
                                         }
+
                                     }
 
                                 }
