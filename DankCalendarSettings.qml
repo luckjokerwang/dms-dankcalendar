@@ -775,7 +775,7 @@ PluginSettings {
                         to: 120
                         stepSize: 5
                         value: mainSettingsCol.loadValue("refreshInterval", 30)
-                        onValueChanged: mainSettingsCol.saveValue("refreshInterval", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("refreshInterval", Math.round(value))
                     }
                 }
 
@@ -797,7 +797,7 @@ PluginSettings {
                         to: 350
                         stepSize: 10
                         value: mainSettingsCol.loadValue("pillMaxWidth", 160)
-                        onValueChanged: mainSettingsCol.saveValue("pillMaxWidth", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("pillMaxWidth", Math.round(value))
                     }
                 }
 
@@ -819,7 +819,7 @@ PluginSettings {
                         to: 30
                         stepSize: 1
                         value: mainSettingsCol.loadValue("nowWindowMinutes", 5)
-                        onValueChanged: mainSettingsCol.saveValue("nowWindowMinutes", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("nowWindowMinutes", Math.round(value))
                     }
                 }
 
@@ -841,7 +841,7 @@ PluginSettings {
                         to: 90
                         stepSize: 1
                         value: mainSettingsCol.loadValue("agendaPastDays", 7)
-                        onValueChanged: mainSettingsCol.saveValue("agendaPastDays", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("agendaPastDays", Math.round(value))
                     }
                 }
 
@@ -863,7 +863,7 @@ PluginSettings {
                         to: 90
                         stepSize: 7
                         value: mainSettingsCol.loadValue("agendaFutureDays", 30)
-                        onValueChanged: mainSettingsCol.saveValue("agendaFutureDays", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("agendaFutureDays", Math.round(value))
                     }
                 }
 
@@ -885,7 +885,7 @@ PluginSettings {
                         to: 14
                         stepSize: 1
                         value: mainSettingsCol.loadValue("lookAheadDays", 1)
-                        onValueChanged: mainSettingsCol.saveValue("lookAheadDays", Math.round(value))
+                        onMoved: mainSettingsCol.saveValue("lookAheadDays", Math.round(value))
                     }
                 }
 

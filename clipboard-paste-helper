@@ -16,13 +16,28 @@ def get_clipboard_types():
     return []
 
 def main():
+    cache_base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    cache_dir = os.path.join(cache_base, "dms-ai", "paste")
+    try:
+        os.makedirs(cache_dir, mode=0o700, exist_ok=True)
+        now_ts = time.time()
+        for f in os.listdir(cache_dir):
+            fp = os.path.join(cache_dir, f)
+            if os.path.isfile(fp) and (now_ts - os.path.getmtime(fp)) > 86400:
+                try:
+                    os.remove(fp)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     types = get_clipboard_types()
     
     # 1. Check if raw image in clipboard
     for t in types:
         if re.match(r"^image/(png|jpeg|jpg|webp)", t):
             ts = int(time.time() * 1000)
-            target = f"/tmp/dms_ai_paste_{ts}.png"
+            target = os.path.join(cache_dir, f"dms_ai_paste_{ts}.png")
             with open(target, "wb") as f:
                 res = subprocess.run(["wl-paste", "-t", t], stdout=f, stderr=subprocess.PIPE, timeout=3)
             if res.returncode == 0 and os.path.exists(target) and os.path.getsize(target) > 0:

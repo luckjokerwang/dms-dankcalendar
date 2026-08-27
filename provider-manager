@@ -118,10 +118,18 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    os.makedirs(CONFIG_DIR, exist_ok=True)
+    os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(CONFIG_DIR, 0o700)
+    except Exception:
+        pass
     if not os.path.exists(CONFIG_FILE):
         save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except Exception:
+        pass
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -134,9 +142,20 @@ def load_config():
         return DEFAULT_CONFIG
 
 def save_config(data):
-    os.makedirs(CONFIG_DIR, exist_ok=True)
+    os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except Exception:
+        pass
+
+def get_ssl_context():
+    ctx = ssl.create_default_context()
+    if os.environ.get("DMS_AI_INSECURE_SSL") == "1":
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 def cmd_get_presets():
     print(json.dumps({"status": "ok", "presets": PRESET_PROVIDERS}, ensure_ascii=False))
@@ -280,9 +299,7 @@ def cmd_fetch_models(provider_id):
         headers["Authorization"] = f"Bearer {api_key}"
 
     req = urllib.request.Request(models_url, headers=headers)
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = get_ssl_context()
 
     start_time = time.time()
     try:
@@ -341,9 +358,7 @@ def cmd_test(provider_id_or_url, api_key=None):
         headers["Authorization"] = f"Bearer {key}"
 
     req = urllib.request.Request(url, headers=headers)
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = get_ssl_context()
 
     start_time = time.time()
     try:

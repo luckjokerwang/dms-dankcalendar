@@ -7,11 +7,25 @@ Manages chat session history (list, get, delete, clear).
 import sys
 import os
 import json
+import shutil
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "data")
-SESSIONS_DIR = os.path.join(DATA_DIR, "sessions")
-os.makedirs(SESSIONS_DIR, exist_ok=True)
+XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+SESSIONS_DIR = os.path.join(XDG_DATA_HOME, "dms-dankcalendar", "sessions")
+os.makedirs(SESSIONS_DIR, mode=0o700, exist_ok=True)
+
+# 自动兼容老版本数据迁移
+LEGACY_DIR = os.path.join(SCRIPT_DIR, "data", "sessions")
+if os.path.exists(LEGACY_DIR):
+    for f in os.listdir(LEGACY_DIR):
+        if f.endswith(".json"):
+            old_p = os.path.join(LEGACY_DIR, f)
+            new_p = os.path.join(SESSIONS_DIR, f)
+            if not os.path.exists(new_p):
+                try:
+                    shutil.copy2(old_p, new_p)
+                except Exception:
+                    pass
 
 def list_sessions():
     sessions = []

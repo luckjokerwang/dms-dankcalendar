@@ -233,7 +233,7 @@ PluginComponent {
 
         var nextCmd = taskActionQueue.shift();
         isActionRunning = true;
-        singleTaskActionProcess.command = ["sh", "-c", nextCmd];
+        singleTaskActionProcess.command = Array.isArray(nextCmd) ? nextCmd : ["sh", "-c", nextCmd];
         singleTaskActionProcess.running = true;
     }
 
@@ -302,12 +302,11 @@ PluginComponent {
         pendingTasksCount = newPending.length;
 
         // Background write via sequential queue
-        var escaped = cleanSummary.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        var cmd = "dcal ipc tasks.create calendarId=" + cid + " summary=\"" + escaped + "\"";
+        var cmdArgs = ["dcal", "ipc", "tasks.create", "calendarId=" + cid, "summary=" + cleanSummary];
         if (priorityVal > 0) {
-            cmd += " priority=" + priorityVal;
+            cmdArgs.push("priority=" + priorityVal);
         }
-        queueTaskAction(cmd);
+        queueTaskAction(cmdArgs);
     }
 
     function completeTask(taskId, completed) {
@@ -347,7 +346,7 @@ PluginComponent {
         }
 
         // Background write via sequential queue
-        queueTaskAction("dcal ipc tasks.complete id=" + taskId + " completed=" + (completed ? "true" : "false"));
+        queueTaskAction(["dcal", "ipc", "tasks.complete", "id=" + taskId, "completed=" + (completed ? "true" : "false")]);
     }
 
     function deleteTask(taskId) {
@@ -358,7 +357,7 @@ PluginComponent {
         completedTasksCount = completedTasks.length;
 
         // Background write via sequential queue
-        queueTaskAction("dcal ipc tasks.delete id=" + taskId);
+        queueTaskAction(["dcal", "ipc", "tasks.delete", "id=" + taskId]);
     }
 
     function deleteEvent(ev) {
@@ -374,11 +373,11 @@ PluginComponent {
         root.agendaModel = root.buildAgenda(root.agendaEvents);
 
         // Background write via sequential queue
-        var cmd = "dcal ipc events.delete id=" + ev.id;
+        var cmdArgs = ["dcal", "ipc", "events.delete", "id=" + ev.id];
         if (ev.recurringId && ev.start) {
-            cmd += " occurrenceStart=" + ev.start;
+            cmdArgs.push("occurrenceStart=" + ev.start);
         }
-        queueTaskAction(cmd);
+        queueTaskAction(cmdArgs);
     }
 
     function refreshAll() {
@@ -1327,323 +1326,25 @@ PluginComponent {
             }
 
             // Agenda View Container
-            Item {
+            AgendaView {
+                id: agendaViewItem
                 visible: root.activeModule === "agenda"
                 width: parent.width
-                // The list scrolls inside a fixed viewport when it grows
-                // beyond the popout. agendaContentHeight is computed with
-                // the model (fixed per-kind row heights), so the popout has
-                // its final size before DankPopout positions it.
                 height: 420
                 implicitHeight: visible ? 420 : 0
-
-                DankFlickable {
-                    id: agendaFlick
-
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingS
-                    contentHeight: eventColumn.implicitHeight
-                    clip: true
-
-                    // Open the list scrolled to today, not to the oldest
-                    // past day. DMS keeps popout contents warm after close,
-                    // so reset on every open instead of relying only on
-                    // Component.onCompleted. Once open, stop pinning as soon
-                    // as the user scrolls in either direction.
-                    property bool userScrolled: false
-                    readonly property real todayY: Math.max(0, Math.min(root.agendaTodayOffset, contentHeight - height))
-
-                    function pinToToday() {
-                        if (!userScrolled)
-                            contentY = todayY;
-
-                    }
-
-                    function resetToToday() {
-                        userScrolled = false;
-                        todayJumpAnim.stop();
-                        pinToToday();
-                        // The popout viewport can finish sizing one event-loop
-                        // turn after the opened signal.
-                        Qt.callLater(() => agendaFlick.pinToToday());
-                    }
-
-                    onMovementStarted: userScrolled = true
-                    onTodayYChanged: pinToToday()
-                    Component.onCompleted: resetToToday()
-
-                    NumberAnimation {
-                        id: todayJumpAnim
-
-                        target: agendaFlick
-                        property: "contentY"
-                        duration: 250
-                        easing.type: Easing.OutCubic
-                    }
-
-                    Column {
-                        id: eventColumn
-
-                        width: agendaFlick.width
-                        spacing: 2
-
-                        StyledText {
-                            visible: root.agendaModel.length === 0
-                            width: parent.width
-                            text: root.agendaLoading ? "Loading events…" : "No events in this range."
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: Theme.surfaceVariantText
-                        }
-
-                        Repeater {
-                            model: root.agendaModel
-
-                            delegate: Item {
-                                id: agendaRow
-
-                                required property var modelData
-                                readonly property string phase: modelData.kind === "event" ? root.eventPhase(modelData.ev) : ""
-
-                                width: eventColumn.width
-                                height: modelData.kind === "event" ? 52 : (modelData.kind === "day" ? 32 : 28)
-
-                                // Week divider: small label + hairline.
-                                Row {
-                                    visible: agendaRow.modelData.kind === "week"
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.leftMargin: Theme.spacingXS
-                                    anchors.rightMargin: Theme.spacingXS
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: Theme.spacingS
-
-                                    StyledText {
-                                        id: weekLabel
-
-                                        text: agendaRow.modelData.kind === "week" ? agendaRow.modelData.label : ""
-                                        font.pixelSize: Math.max(9, Math.round(Theme.fontSizeSmall * 0.85))
-                                        font.weight: Font.Medium
-                                        color: Theme.surfaceVariantText
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                    Rectangle {
-                                        width: parent.width - weekLabel.implicitWidth - Theme.spacingS * 2
-                                        height: 1
-                                        color: Theme.withAlpha(Theme.outline, 0.3)
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-
-                                }
-
-                                // Day header: shaded band, today tinted primary.
-                                Rectangle {
-                                    visible: agendaRow.modelData.kind === "day"
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: 26
-                                    radius: Theme.cornerRadiusSmall
-                                    color: agendaRow.modelData.isToday ? Theme.withAlpha(Theme.primary, 0.16) : Theme.surfaceContainerHigh
-
-                                    StyledText {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: Theme.spacingS
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: agendaRow.modelData.kind === "day" ? agendaRow.modelData.label : ""
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        font.weight: Font.Medium
-                                        color: agendaRow.modelData.isToday ? Theme.primary : Theme.surfaceText
-                                    }
-
-                                }
-
-                                // Event row: click opens the event's details
-                                // window in DankCalendar.
-                                Rectangle {
-                                    id: eventRect
-
-                                    visible: agendaRow.modelData.kind === "event"
-                                    anchors.fill: parent
-                                    radius: Theme.cornerRadiusSmall
-                                    color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
-
-                                    HoverHandler {
-                                        id: rowHover
-
-                                        enabled: eventRect.visible
-                                        cursorShape: Qt.PointingHandCursor
-                                    }
-
-                                    Row {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.leftMargin: Theme.spacingS
-                                        anchors.rightMargin: Theme.spacingS
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        spacing: Theme.spacingS
-
-                                        // Left Clickable Content Area
-                                        Item {
-                                            id: eventContentItem
-                                            width: parent.width - 28 - Theme.spacingS
-                                            height: 44
-                                            anchors.verticalCenter: parent.verticalCenter
-
-                                            Row {
-                                                anchors.fill: parent
-                                                spacing: Theme.spacingS
-
-                                                Rectangle {
-                                                    width: 4
-                                                    height: 34
-                                                    radius: 2
-                                                    color: agendaRow.phase === "now" ? "#66BB6A" : (agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.primary)
-                                                    opacity: agendaRow.phase === "past" ? 0.4 : 1
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                }
-
-                                                Column {
-                                                    width: parent.width - 4 - Theme.spacingS
-                                                    spacing: 1
-                                                    anchors.verticalCenter: parent.verticalCenter
-
-                                                    StyledText {
-                                                        width: parent.width
-                                                        text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.summary || "(untitled)") : ""
-                                                        font.pixelSize: Theme.fontSizeSmall
-                                                        font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
-                                                        color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
-                                                        elide: Text.ElideRight
-                                                        maximumLineCount: 1
-                                                    }
-
-                                                    StyledText {
-                                                        width: parent.width
-                                                        text: {
-                                                            if (agendaRow.modelData.kind !== "event")
-                                                                return "";
-
-                                                            var ev = agendaRow.modelData.ev;
-                                                            return root.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
-                                                        }
-                                                        font.pixelSize: Theme.fontSizeSmall
-                                                        color: agendaRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
-                                                        elide: Text.ElideRight
-                                                        maximumLineCount: 1
-                                                    }
-
-                                                }
-
-                                            }
-
-                                            TapHandler {
-                                                onTapped: {
-                                                    root.openEvent(agendaRow.modelData.ev);
-                                                    if (popout.closePopout)
-                                                        popout.closePopout();
-
-                                                }
-                                            }
-
-                                        }
-
-                                        // Delete Action Button (Task-style)
-                                        Rectangle {
-                                            width: 28
-                                            height: 28
-                                            radius: 14
-                                            color: delEvMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.15) : "transparent"
-                                            visible: rowHover.hovered || delEvMouse.containsMouse
-                                            anchors.verticalCenter: parent.verticalCenter
-
-                                            DankIcon {
-                                                name: "delete"
-                                                size: 16
-                                                color: delEvMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
-                                                anchors.centerIn: parent
-                                            }
-
-                                            MouseArea {
-                                                id: delEvMouse
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    root.deleteEvent(agendaRow.modelData.ev);
-                                                }
-                                            }
-                                        }
-
-                                    }
-
-                                }
-
-                            }
-
-                        }
-
-                    }
-
+                rootWidget: root
+                onCloseRequested: {
+                    if (popout.closePopout)
+                        popout.closePopout();
                 }
 
                 Connections {
                     target: popout.parentPopout
 
                     function onOpened() {
-                        agendaFlick.resetToToday();
+                        agendaViewItem.resetToToday();
                     }
                 }
-
-                // Floating "Today" chip: appears when the list is scrolled
-                // away from today and jumps back to it.
-                Rectangle {
-                    visible: !todayJumpAnim.running && Math.abs(agendaFlick.contentY - agendaFlick.todayY) > 120
-                    width: todayChipRow.implicitWidth + Theme.spacingM * 2
-                    height: 28
-                    radius: 14
-                    color: Theme.primary
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: Theme.spacingM
-
-                    Row {
-                        id: todayChipRow
-
-                        anchors.centerIn: parent
-                        spacing: Theme.spacingXS
-
-                        DankIcon {
-                            name: agendaFlick.contentY > agendaFlick.todayY ? "arrow_upward" : "arrow_downward"
-                            size: Theme.iconSizeSmall
-                            color: Theme.primaryText
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        StyledText {
-                            text: "Today"
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.weight: Font.Medium
-                            color: Theme.primaryText
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                    }
-
-                    // MouseArea, not TapHandler: a default-policy TapHandler
-                    // only takes a passive grab, so the tap would also fire
-                    // the event row underneath (which opens DankCalendar).
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            todayJumpAnim.to = agendaFlick.todayY;
-                            todayJumpAnim.restart();
-                        }
-                    }
-
-                }
-
             }
 
             // Tasks View Container
