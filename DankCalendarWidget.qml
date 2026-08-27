@@ -74,6 +74,13 @@ PluginComponent {
     }
     readonly property string activeModule: globalActiveModule.value || "agenda"
 
+    PluginGlobalVar {
+        id: globalBarModule
+        varName: "dankCalendarBarModule"
+        defaultValue: "agenda"
+    }
+    readonly property string barModule: (globalBarModule.value === "tasks") ? "tasks" : "agenda"
+
     property string tasksScriptPath: Qt.resolvedUrl("./get-tasks").toString().replace(/^file:\/\//, "")
     property string aiScriptPath: Qt.resolvedUrl("./ai-client").toString().replace(/^file:\/\//, "")
     property string batchScriptPath: Qt.resolvedUrl("./batch-create-items").toString().replace(/^file:\/\//, "")
@@ -243,13 +250,9 @@ PluginComponent {
     }
 
     function cycleModule() {
-        if (activeModule === "agenda") {
-            globalActiveModule.set("tasks");
-        } else if (activeModule === "tasks") {
-            globalActiveModule.set("ai");
-        } else {
-            globalActiveModule.set("agenda");
-        }
+        var next = (barModule === "agenda") ? "tasks" : "agenda";
+        globalBarModule.set(next);
+        globalActiveModule.set(next);
     }
 
     function fetchTasks() {
@@ -1202,7 +1205,10 @@ PluginComponent {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: globalActiveModule.set("agenda")
+                        onClicked: {
+                            globalActiveModule.set("agenda");
+                            globalBarModule.set("agenda");
+                        }
                     }
                 }
 
@@ -1236,7 +1242,10 @@ PluginComponent {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: globalActiveModule.set("tasks")
+                        onClicked: {
+                            globalActiveModule.set("tasks");
+                            globalBarModule.set("tasks");
+                        }
                     }
                 }
 
@@ -1415,7 +1424,7 @@ PluginComponent {
 
                     DankIcon {
                         id: hIcon
-                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : root.activeModule === "ai" ? "smart_toy" : "calendar_today")
+                        name: root.isRefreshing ? "sync" : (root.barModule === "tasks" ? "task_alt" : "calendar_today")
                         size: iconSize
                         color: Theme.primary
                         anchors.centerIn: parent
@@ -1448,7 +1457,7 @@ PluginComponent {
                 // Agenda Mode Display
                 Row {
                     spacing: Theme.spacingXS
-                    visible: root.activeModule === "agenda"
+                    visible: root.barModule === "agenda"
                     anchors.verticalCenter: parent.verticalCenter
 
                     Item {
@@ -1525,7 +1534,7 @@ PluginComponent {
                 // Tasks Mode Display
                 Row {
                     spacing: Theme.spacingXS
-                    visible: root.activeModule === "tasks"
+                    visible: root.barModule === "tasks"
                     anchors.verticalCenter: parent.verticalCenter
 
                     StyledText {
@@ -1584,20 +1593,6 @@ PluginComponent {
                     }
                 }
 
-                // AI Mode Display
-                Row {
-                    spacing: Theme.spacingXS
-                    visible: root.activeModule === "ai"
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    StyledText {
-                        text: "AI 排程助理"
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.weight: Font.Medium
-                        color: Theme.primary
-                    }
-                }
-
             }
 
             // Hover shows the full event in the same tooltip (handy when the
@@ -1644,7 +1639,7 @@ PluginComponent {
 
                     DankIcon {
                         id: vIcon
-                        name: root.isRefreshing ? "sync" : (root.activeModule === "tasks" ? "task_alt" : root.activeModule === "ai" ? "smart_toy" : "calendar_today")
+                        name: root.isRefreshing ? "sync" : (root.barModule === "tasks" ? "task_alt" : "calendar_today")
                         size: iconSize
                         color: Theme.primary
                         anchors.centerIn: parent
@@ -1676,7 +1671,7 @@ PluginComponent {
 
                 NumericText {
                     width: root.widgetThickness
-                    text: root.activeModule === "tasks" ? (root.pendingTasksCount > 0 ? String(root.pendingTasksCount) : "✓") : root.compactTimeText
+                    text: root.barModule === "tasks" ? (root.pendingTasksCount > 0 ? String(root.pendingTasksCount) : "✓") : root.compactTimeText
                     reserveText: "99d"
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Bold
@@ -1684,7 +1679,7 @@ PluginComponent {
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                     anchors.horizontalCenter: parent.horizontalCenter
-                    visible: root.activeModule === "tasks" || root.hasEvent
+                    visible: root.barModule === "tasks" || root.hasEvent
                 }
 
             }
