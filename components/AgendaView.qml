@@ -211,8 +211,9 @@ Item {
                                 }
                             }
 
-                            // Delete Action Button
+                            // Delete Action Button (Visible on Hover)
                             Rectangle {
+                                visible: rowHover.hovered || deleteMouse.containsMouse
                                 width: 26
                                 height: 26
                                 radius: 13

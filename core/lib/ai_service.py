@@ -143,9 +143,12 @@ class AiService:
         req = urllib.request.Request(req_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
 
         try:
-            with urllib.request.urlopen(req, context=ctx, timeout=60) as resp:
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
                 accumulated_text = ""
-                for line_bytes in resp:
+                while True:
+                    line_bytes = resp.readline()
+                    if not line_bytes:
+                        break
                     line = line_bytes.decode("utf-8", errors="replace").strip()
                     if not line:
                         continue
@@ -161,7 +164,6 @@ class AiService:
                                 text_chunk = delta.get("content", "")
                                 if text_chunk:
                                     accumulated_text += text_chunk
-                                    # Output SSE chunk for QML SplitParser
                                     print(json.dumps({"type": "chunk", "text": text_chunk}, ensure_ascii=False), flush=True)
                         except Exception:
                             pass
@@ -173,8 +175,17 @@ class AiService:
                     "fullText": accumulated_text,
                     "proposal": proposal
                 }, ensure_ascii=False), flush=True)
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")
+                err_json = json.loads(err_body)
+                err_msg = err_json.get("error", {}).get("message") or str(err_json)
+            except Exception:
+                err_msg = err_body or str(e)
+            print(json.dumps({"type": "error", "message": f"HTTP {e.code}: {err_msg}"}, ensure_ascii=False), flush=True)
         except Exception as e:
-            print(json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False), flush=True)
+            print(json.dumps({"type": "error", "message": f"连接失败: {str(e)}"}, ensure_ascii=False), flush=True)
 
     @staticmethod
     def extract_proposal(text: str) -> Optional[Dict[str, Any]]:
@@ -185,3 +196,13 @@ class AiService:
             except Exception:
                 pass
         return None
+
+    @classmethod
+    def generate_smart_title(cls, payload_dict: Dict[str, Any]) -> str:
+        prompt = payload_dict.get("prompt", "")
+        if not prompt:
+            return "新排程会话"
+        clean_prompt = prompt.strip()
+        if len(clean_prompt) <= 12:
+            return clean_prompt
+        return clean_prompt[:12] + "..."

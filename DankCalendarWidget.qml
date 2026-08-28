@@ -241,7 +241,7 @@ PluginComponent {
             calendarStore: root.calendarStore
             taskStore: root.taskStore
             barModule: root.barModule
-            pillMaxWidth: pluginData.pillMaxWidth || (root.constants ? root.constants.defaultPillMaxWidth : 160)
+            pillMaxWidth: pluginData.pillMaxWidth || (root.constants ? root.constants.defaultPillMaxWidth : 200)
             dynamicWidth: pluginData.dynamicWidth ?? false
             scrollTitle: pluginData.scrollTitle ?? true
             pillDisplayMode: pluginData.pillDisplayMode || "full"

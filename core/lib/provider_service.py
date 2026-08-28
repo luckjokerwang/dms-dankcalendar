@@ -26,6 +26,33 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "models": []
     },
     {
+        "id": "siliconflow",
+        "name": "硅基流动 (SiliconFlow)",
+        "baseUrl": "https://api.siliconflow.cn/v1",
+        "icon": "auto_awesome",
+        "color": "#7c3aed",
+        "desc": "海量开源大模型高速中继",
+        "models": []
+    },
+    {
+        "id": "sensenova",
+        "name": "商汤日日新 (SenseNova)",
+        "baseUrl": "https://token.sensenova.cn/v1",
+        "icon": "cloud",
+        "color": "#0ea5e9",
+        "desc": "商汤日日新官方大模型端点",
+        "models": []
+    },
+    {
+        "id": "qwen",
+        "name": "通义千问 (DashScope)",
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "icon": "cloud",
+        "color": "#ff6a00",
+        "desc": "阿里云通义千问官方兼容端点",
+        "models": []
+    },
+    {
         "id": "openai",
         "name": "OpenAI",
         "baseUrl": "https://api.openai.com/v1",
@@ -68,15 +95,6 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "hub",
         "color": "#6366f1",
         "desc": "全网大模型聚合路由",
-        "models": []
-    },
-    {
-        "id": "qwen",
-        "name": "通义千问 (DashScope)",
-        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "icon": "cloud",
-        "color": "#ff6a00",
-        "desc": "阿里云通义千问官方兼容端点",
         "models": []
     },
     {
@@ -197,7 +215,7 @@ class ProviderService:
                     break
 
         if not base_url:
-            return {"status": "error", "message": "Missing baseUrl"}
+            return {"status": "error", "message": "缺少 API Base URL 地址"}
 
         clean_base = base_url.rstrip("/")
         models_url = f"{clean_base}/models"
@@ -218,9 +236,11 @@ class ProviderService:
                 latency = int((time.time() - start_time) * 1000)
                 body = resp.read().decode("utf-8")
                 data = json.loads(body)
-                raw_models = data.get("data") if isinstance(data, dict) else data
-                if not isinstance(raw_models, list):
-                    raw_models = []
+                raw_models = []
+                if isinstance(data, dict):
+                    raw_models = data.get("data") or data.get("models") or []
+                elif isinstance(data, list):
+                    raw_models = data
 
                 parsed_models = []
                 for m in raw_models:
@@ -229,15 +249,10 @@ class ProviderService:
                         parsed_models.append({
                             "id": m_id,
                             "name": m.get("name") or m_id,
-                            "desc": f"Context: {m.get('context_length')}" if m.get('context_length') else "通用模型"
+                            "desc": f"上下文: {m.get('context_length')}" if m.get('context_length') else "通用大模型"
                         })
                     elif isinstance(m, str):
-                        parsed_models.append({"id": m, "name": m, "desc": "模型"})
-
-                # Update provider in config if exists
-                if target_prov:
-                    target_prov["models"] = parsed_models
-                    cls.save_provider(target_prov)
+                        parsed_models.append({"id": m, "name": m, "desc": "通用大模型"})
 
                 return {
                     "status": "ok",
@@ -245,5 +260,14 @@ class ProviderService:
                     "count": len(parsed_models),
                     "models": parsed_models
                 }
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")
+                err_json = json.loads(err_body)
+                err_msg = err_json.get("error", {}).get("message") or str(err_json)
+            except Exception:
+                err_msg = err_body or str(e)
+            return {"status": "error", "message": f"HTTP {e.code}: {err_msg}"}
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": f"连接失败: {str(e)}"}

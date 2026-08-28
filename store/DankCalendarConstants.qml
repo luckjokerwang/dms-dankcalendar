@@ -18,7 +18,7 @@ QtObject {
     readonly property int defaultPopoutWidth: 440
     readonly property int defaultPopoutHeight: 560
     readonly property int defaultContentHeight: 420
-    readonly property int defaultPillMaxWidth: 160
+    readonly property int defaultPillMaxWidth: 200
     readonly property int defaultIconSize: 18
 
     // Defaults & Intervals

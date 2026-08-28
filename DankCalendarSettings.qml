@@ -25,6 +25,9 @@ PluginSettings {
     property string editProviderName: ""
     property string editProviderBaseUrl: "https://"
     property string editProviderApiKey: ""
+    property var editProviderFetchedModels: []
+    property var editProviderSelectedModelIds: []
+    property string customModelInput: ""
     property bool isTesting: false
     property string testResultText: ""
     property bool testSuccess: false
@@ -40,14 +43,21 @@ PluginSettings {
                 try {
                     var res = JSON.parse(trimmed);
                     if (res.status === "ok") {
-                        root.testResultText = "🟢 连接成功 (" + (res.latency || 0) + "ms) · 获得 " + (res.count || 0) + " 个模型";
+                        root.testResultText = "🟢 连接成功 (" + (res.latency || 0) + "ms) · 发现 " + (res.count || 0) + " 个模型";
                         root.testSuccess = true;
+                        var fetched = res.models || [];
+                        root.editProviderFetchedModels = fetched;
+                        var ids = [];
+                        for (var i = 0; i < fetched.length; i++) {
+                            ids.push(fetched[i].id);
+                        }
+                        root.editProviderSelectedModelIds = ids;
                     } else {
                         root.testResultText = "❌ " + (res.message || "连接失败");
                         root.testSuccess = false;
                     }
                 } catch(e) {
-                    root.testResultText = "❌ 解析响应失败";
+                    root.testResultText = "❌ 解析响应失败: " + e;
                     root.testSuccess = false;
                 }
                 root.isTesting = false;
@@ -64,6 +74,9 @@ PluginSettings {
         editProviderName = "";
         editProviderBaseUrl = "https://";
         editProviderApiKey = "";
+        editProviderFetchedModels = [];
+        editProviderSelectedModelIds = [];
+        customModelInput = "";
         testResultText = "";
         testSuccess = false;
         showEditForm = true;
@@ -76,6 +89,13 @@ PluginSettings {
         editProviderName = p.name || "";
         editProviderBaseUrl = p.baseUrl || "https://";
         editProviderApiKey = p.apiKey || "";
+        editProviderFetchedModels = p.models || [];
+        var ids = [];
+        for (var i = 0; i < (p.models || []).length; i++) {
+            ids.push(p.models[i].id);
+        }
+        editProviderSelectedModelIds = ids;
+        customModelInput = "";
         testResultText = "";
         testSuccess = false;
         showEditForm = true;
@@ -94,9 +114,55 @@ PluginSettings {
         editProviderName = preset.name || "";
         editProviderBaseUrl = preset.baseUrl || "https://";
         editProviderApiKey = "";
+        editProviderFetchedModels = preset.models || [];
+        var ids = [];
+        for (var j = 0; j < (preset.models || []).length; j++) {
+            ids.push(preset.models[j].id);
+        }
+        editProviderSelectedModelIds = ids;
+        customModelInput = "";
         testResultText = "";
         testSuccess = false;
         showEditForm = true;
+    }
+
+    function isModelSelected(modelId) {
+        return editProviderSelectedModelIds.indexOf(modelId) !== -1;
+    }
+
+    function toggleModelSelection(modelId) {
+        var arr = editProviderSelectedModelIds.slice();
+        var idx = arr.indexOf(modelId);
+        if (idx !== -1) {
+            arr.splice(idx, 1);
+        } else {
+            arr.push(modelId);
+        }
+        editProviderSelectedModelIds = arr;
+    }
+
+    function addCustomModel() {
+        var mid = customModelInput.trim();
+        if (!mid) return;
+        var existing = false;
+        for (var i = 0; i < editProviderFetchedModels.length; i++) {
+            if (editProviderFetchedModels[i].id === mid) {
+                existing = true;
+                break;
+            }
+        }
+        if (!existing) {
+            var newModels = editProviderFetchedModels.concat([{
+                "id": mid,
+                "name": mid,
+                "desc": "用户自定义模型"
+            }]);
+            editProviderFetchedModels = newModels;
+        }
+        if (editProviderSelectedModelIds.indexOf(mid) === -1) {
+            editProviderSelectedModelIds = editProviderSelectedModelIds.concat([mid]);
+        }
+        customModelInput = "";
     }
 
     // ==========================================
@@ -133,14 +199,14 @@ PluginSettings {
                     spacing: 2
 
                     StyledText {
-                        text: "🤖 AI 大模型服务商管理"
+                        text: "🤖 AI 大模型服务商与模型管理"
                         font.pixelSize: Theme.fontSizeMedium
                         font.weight: Font.Bold
                         color: Theme.surfaceText
                     }
 
                     StyledText {
-                        text: "统一凭证管理 · 点击服务商填写 API Key 并自动拉取官方最新模型"
+                        text: "统一凭证管理 · 填入 API Key 后一键拉取官方最新模型，支持按需勾选启用"
                         font.pixelSize: Theme.fontSizeSmall
                         color: Theme.surfaceVariantText
                     }
@@ -158,7 +224,7 @@ PluginSettings {
                         spacing: 4
                         DankIcon { name: "add"; size: 16; color: "#ffffff" }
                         StyledText {
-                            text: "添加提供方"
+                            text: "添加服务商"
                             font.pixelSize: Theme.fontSizeSmall
                             font.weight: Font.Bold
                             color: "#ffffff"
@@ -179,7 +245,7 @@ PluginSettings {
                 spacing: 6
 
                 StyledText {
-                    text: "预置大厂快捷配置 (点击即可调起配置表单并填 Key):"
+                    text: "主流厂商快速配置 (点击调出配置表单并填 Key):"
                     font.pixelSize: 11
                     color: Theme.surfaceVariantText
                 }
@@ -280,7 +346,7 @@ PluginSettings {
                     DankTextField {
                         width: parent.width
                         text: root.editProviderId
-                        placeholderText: "openai / deepseek / custom"
+                        placeholderText: "例如: sensenova / deepseek / siliconflow"
                         enabled: !root.isEditingProvider
                         onTextChanged: root.editProviderId = text
                     }
@@ -289,11 +355,11 @@ PluginSettings {
                     DankTextField {
                         width: parent.width
                         text: root.editProviderName
-                        placeholderText: "OpenAI / 官方端点"
+                        placeholderText: "例如: 商汤日日新 / DeepSeek 官方"
                         onTextChanged: root.editProviderName = text
                     }
 
-                    StyledText { text: "API Base URL:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    StyledText { text: "API Base URL 地址:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
                     DankTextField {
                         width: parent.width
                         text: root.editProviderBaseUrl
@@ -310,6 +376,7 @@ PluginSettings {
                         onTextChanged: root.editProviderApiKey = text
                     }
 
+                    // Test Status and Latency Text
                     StyledText {
                         visible: !!root.testResultText
                         width: parent.width
@@ -319,6 +386,129 @@ PluginSettings {
                         wrapMode: Text.Wrap
                     }
 
+                    // Model Selection and Filtering Section
+                    Column {
+                        visible: root.editProviderFetchedModels.length > 0
+                        width: parent.width
+                        spacing: 6
+
+                        RowLayout {
+                            width: parent.width
+                            StyledText {
+                                text: "启用模型选择 (点击标签勾选或取消):"
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                color: Theme.surfaceText
+                            }
+                            Item { Layout.fillWidth: true }
+                            StyledText {
+                                text: "全选"
+                                font.pixelSize: 11
+                                color: Theme.primary
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        var ids = [];
+                                        for (var i = 0; i < root.editProviderFetchedModels.length; i++) {
+                                            ids.push(root.editProviderFetchedModels[i].id);
+                                        }
+                                        root.editProviderSelectedModelIds = ids;
+                                    }
+                                }
+                            }
+                            StyledText { text: "·"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                            StyledText {
+                                text: "清空"
+                                font.pixelSize: 11
+                                color: Theme.surfaceVariantText
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.editProviderSelectedModelIds = []
+                                }
+                            }
+                        }
+
+                        Flow {
+                            width: parent.width
+                            spacing: 6
+
+                            Repeater {
+                                model: root.editProviderFetchedModels
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property bool selected: root.isModelSelected(modelData.id)
+
+                                    implicitWidth: chipRow.implicitWidth + 14
+                                    implicitHeight: 26
+                                    radius: 13
+                                    color: selected ? Theme.withAlpha(Theme.primary, 0.2) : Theme.surfaceContainerHigh
+                                    border.width: 1
+                                    border.color: selected ? Theme.primary : Theme.outlineVariant
+
+                                    RowLayout {
+                                        id: chipRow
+                                        anchors.centerIn: parent
+                                        spacing: 4
+
+                                        DankIcon {
+                                            name: selected ? "check_circle" : "radio_button_unchecked"
+                                            size: 13
+                                            color: selected ? Theme.primary : Theme.surfaceVariantText
+                                        }
+
+                                        StyledText {
+                                            text: modelData.name || modelData.id
+                                            font.pixelSize: 10
+                                            font.weight: selected ? Font.Bold : Font.Normal
+                                            color: selected ? Theme.primary : Theme.surfaceText
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.toggleModelSelection(modelData.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add Custom Model Row
+                    RowLayout {
+                        width: parent.width
+                        spacing: Theme.spacingS
+
+                        DankTextField {
+                            Layout.fillWidth: true
+                            text: root.customModelInput
+                            placeholderText: "手动添加指定模型 ID (如 deepseek-reasoner)..."
+                            onTextChanged: root.customModelInput = text
+                            Keys.onReturnPressed: root.addCustomModel()
+                        }
+
+                        Rectangle {
+                            implicitWidth: 80
+                            implicitHeight: 32
+                            radius: 6
+                            color: Theme.surfaceContainerHigh
+                            StyledText {
+                                anchors.centerIn: parent
+                                text: "添加模型"
+                                font.pixelSize: 11
+                                color: Theme.surfaceText
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.addCustomModel()
+                            }
+                        }
+                    }
+
+                    // Form Action Buttons
                     RowLayout {
                         width: parent.width
                         spacing: Theme.spacingM
@@ -330,7 +520,7 @@ PluginSettings {
                             color: Theme.surfaceContainerHigh
                             StyledText {
                                 anchors.centerIn: parent
-                                text: root.isTesting ? "⏳ 测试中..." : "🔍 测试并拉取模型"
+                                text: root.isTesting ? "⏳ 测试拉取中..." : "🔍 测试并拉取模型"
                                 font.pixelSize: 11
                                 font.weight: Font.Medium
                                 color: Theme.surfaceText
@@ -373,9 +563,26 @@ PluginSettings {
                                 onClicked: {
                                     var pId = root.editProviderId.trim().toLowerCase();
                                     if (!pId) {
-                                        root.testResultText = "❌ Provider ID 不能为空";
+                                        root.testResultText = "❌ 服务商 ID 不能为空";
                                         return;
                                     }
+
+                                    // Filter selected models
+                                    var chosenModels = [];
+                                    for (var i = 0; i < root.editProviderFetchedModels.length; i++) {
+                                        var m = root.editProviderFetchedModels[i];
+                                        if (root.editProviderSelectedModelIds.indexOf(m.id) !== -1) {
+                                            chosenModels.push(m);
+                                        }
+                                    }
+
+                                    if (chosenModels.length === 0 && root.editProviderSelectedModelIds.length > 0) {
+                                        for (var j = 0; j < root.editProviderSelectedModelIds.length; j++) {
+                                            var sid = root.editProviderSelectedModelIds[j];
+                                            chosenModels.push({"id": sid, "name": sid, "desc": "模型"});
+                                        }
+                                    }
+
                                     var pObj = {
                                         "id": pId,
                                         "name": root.editProviderName.trim() || pId,
@@ -384,7 +591,7 @@ PluginSettings {
                                         "enabled": true,
                                         "icon": "smart_toy",
                                         "color": "#1565c0",
-                                        "models": []
+                                        "models": chosenModels
                                     };
                                     providerStore.saveProvider(pObj);
                                     root.showEditForm = false;
@@ -531,10 +738,10 @@ PluginSettings {
     }
 
     // ==========================================
-    // 2. 日历常规配置 (使用标准 PluginSettings 组件)
+    // 2. 日历与待办常规参数配置 (完整 8 项统一中文)
     // ==========================================
     StyledText {
-        text: "📅 日历常规设置"
+        text: "📅 日历与待办常规设置"
         font.pixelSize: Theme.fontSizeMedium
         font.weight: Font.Bold
         color: Theme.surfaceText
@@ -543,34 +750,74 @@ PluginSettings {
     SliderSetting {
         settingKey: "refreshInterval"
         label: "刷新间隔"
-        description: "后台轮询日历与待办变更的周期 (默认 30 秒)"
+        description: "后台轮询日历与待办变更的周期 (秒)"
         defaultValue: 30
         minimum: 5
         maximum: 300
         unit: "s"
     }
 
-    SliderSetting {
-        settingKey: "pillMaxWidth"
-        label: "顶栏胶囊最大宽度"
-        description: "顶栏显示事件标题的最大宽度 (默认 160px)"
-        defaultValue: 160
-        minimum: 80
-        maximum: 400
-        unit: "px"
-    }
-
     ToggleSetting {
         settingKey: "dynamicWidth"
         label: "动态宽度适应"
-        description: "短标题自动收缩胶囊宽度，避免占用过多顶栏空间"
+        description: "短标题自动收缩顶栏胶囊宽度，避免占用过多顶栏空间"
         defaultValue: false
     }
 
     ToggleSetting {
-        settingKey: "scrollTitle"
-        label: "长标题滚动动画"
-        description: "当事件标题超出宽度时，在顶栏自动横向来回平滑滚动"
+        settingKey: "showTooltip"
+        label: "鼠标悬停提示"
+        description: "鼠标悬停在顶栏胶囊上时，浮现完整的日程详情与倒计时提示框"
         defaultValue: true
+    }
+
+    SliderSetting {
+        settingKey: "pillMaxWidth"
+        label: "顶栏胶囊最大宽度"
+        description: "顶栏显示事件标题的最大宽度 (像素)"
+        defaultValue: 200
+        minimum: 40
+        maximum: 400
+        unit: "px"
+    }
+
+    SliderSetting {
+        settingKey: "nowWindowMinutes"
+        label: "进行中 ('Now') 判定时长"
+        description: "事件开始后持续在顶栏与列表中显示为 'Now' 的分钟数 (设为 0 关闭)"
+        defaultValue: 5
+        minimum: 0
+        maximum: 60
+        unit: "m"
+    }
+
+    SliderSetting {
+        settingKey: "agendaPastDays"
+        label: "历史日程回溯天数"
+        description: "弹窗日程列表中向上滚动可查看的历史日程天数"
+        defaultValue: 7
+        minimum: 0
+        maximum: 30
+        unit: "d"
+    }
+
+    SliderSetting {
+        settingKey: "agendaFutureDays"
+        label: "未来日程覆盖天数"
+        description: "弹窗日程列表中展示的未来日程天数"
+        defaultValue: 30
+        minimum: 1
+        maximum: 90
+        unit: "d"
+    }
+
+    SliderSetting {
+        settingKey: "lookAheadDays"
+        label: "顶栏前瞻检索天数"
+        description: "顶栏胶囊向前检索下一个待办日程的最大天数"
+        defaultValue: 1
+        minimum: 1
+        maximum: 14
+        unit: "d"
     }
 }

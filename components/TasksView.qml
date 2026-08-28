@@ -327,8 +327,9 @@ Item {
                                 }
                             }
 
-                            // Delete Task Button
+                            // Delete Task Button (Visible on Hover)
                             Rectangle {
+                                visible: rowHover.hovered || delMouse.containsMouse
                                 width: 28
                                 height: 28
                                 radius: 14
@@ -473,8 +474,9 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
 
-                                // Delete Completed Task
+                                // Delete Completed Task (Visible on Hover)
                                 Rectangle {
+                                    visible: compRowHover.containsMouse || delCompMouse.containsMouse
                                     width: 24
                                     height: 24
                                     radius: 12

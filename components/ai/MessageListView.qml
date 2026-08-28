@@ -17,6 +17,44 @@ ListView {
     spacing: Theme.spacingM
     model: aiStore ? aiStore.messages : []
 
+    // Welcome placeholder
+    Item {
+        anchors.centerIn: parent
+        width: parent.width - Theme.spacingL * 2
+        visible: aiStore ? (aiStore.messages.length === 0 && !aiStore.isGenerating) : false
+
+        Column {
+            anchors.centerIn: parent
+            width: parent.width
+            spacing: Theme.spacingS
+
+            DankIcon {
+                name: "smart_toy"
+                size: 36
+                color: Theme.primary
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            StyledText {
+                width: parent.width
+                text: "智能排程助手"
+                font.pixelSize: Theme.fontSizeLarge
+                font.weight: Font.Bold
+                horizontalAlignment: Text.AlignHCenter
+                color: Theme.surfaceText
+            }
+
+            StyledText {
+                width: parent.width
+                text: "直接输入计划需求，或按 Ctrl+V 粘贴课程表/截图，AI 将为您智能拆解日程与待办"
+                font.pixelSize: Theme.fontSizeSmall
+                horizontalAlignment: Text.AlignHCenter
+                color: Theme.surfaceVariantText
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
     delegate: Item {
         id: msgDelegate
         required property var modelData
@@ -120,7 +158,7 @@ ListView {
                     id: streamText
                     anchors.centerIn: parent
                     width: parent.width - Theme.spacingM * 2
-                    text: (aiStore && aiStore.streamingAssistantText) ? aiStore.streamingAssistantText : "Thinking..."
+                    text: (aiStore && aiStore.streamingAssistantText) ? aiStore.streamingAssistantText : "🤖 正在思考与排程规划中..."
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceText
                     wrapMode: Text.Wrap
