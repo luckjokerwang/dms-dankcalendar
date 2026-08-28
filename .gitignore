@@ -1,6 +1,7 @@
 # 本地数据与设计任务
 data/
 tasks/
+SPEC.md
 *.metadata.json
 
 # Python 编译缓存
