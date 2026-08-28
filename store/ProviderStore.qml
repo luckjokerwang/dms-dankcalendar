@@ -45,9 +45,9 @@ Item {
         id: listProc
         command: [constants.coreScriptPath, "provider", "list"]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -65,9 +65,9 @@ Item {
         id: presetsProc
         command: [constants.coreScriptPath, "provider", "get-presets"]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);

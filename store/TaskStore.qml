@@ -25,9 +25,9 @@ Item {
         id: fetchTasksProc
         command: [constants.coreScriptPath, "tasks", "list"]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -39,7 +39,10 @@ Item {
                         store.defaultTaskCalendarId = res.defaultCalendarId || "";
                         store.taskCalendars = res.taskCalendars || [];
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.warn("[TaskStore] parse error:", e);
+                }
+                store.tasksLoading = false;
             }
         }
         onExited: (code) => {

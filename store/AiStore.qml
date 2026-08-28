@@ -23,7 +23,7 @@ Item {
     signal proposalConfirmed(var result)
     signal sessionChanged()
 
-    // 1. Stream Process
+    // 1. Stream Process (Streaming SSE chunks)
     Process {
         id: streamProc
         command: []
@@ -81,9 +81,9 @@ Item {
         id: sessionsListProc
         command: [constants.coreScriptPath, "session", "list"]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -100,9 +100,9 @@ Item {
         id: sessionGetProc
         command: []
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -124,9 +124,9 @@ Item {
         id: batchProc
         command: []
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -221,10 +221,10 @@ Item {
             });
             var smartTitleProc = Qt.createQmlObject('import Quickshell.Io; Process {}', store);
             smartTitleProc.command = [constants.coreScriptPath, "session", "smart-title", "--payload", smartTitlePayload];
-            smartTitleProc.stdout = Qt.createQmlObject('import Quickshell.Io; SplitParser {}', store);
-            smartTitleProc.stdout.onRead = function(line) {
+            smartTitleProc.stdout = Qt.createQmlObject('import Quickshell.Io; StdioCollector {}', store);
+            smartTitleProc.stdout.onStreamFinished = function() {
                 try {
-                    var r = JSON.parse(line.trim());
+                    var r = JSON.parse((smartTitleProc.stdout.text || "").trim());
                     if (r.status === "ok" && r.data && r.data.title) {
                         store.currentSessionTitle = r.data.title;
                     }

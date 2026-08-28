@@ -80,9 +80,9 @@ Item {
         id: fetchNextProc
         command: [constants.coreScriptPath, "agenda", "next", "--lookahead", String(store.lookAheadDays), "--now-window", String(store.nowWindowMinutes)]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var payload = JSON.parse(trimmed);
@@ -90,6 +90,7 @@ Item {
                     store.isLoading = false;
                     store.hasSyncError = false;
                 } catch (e) {
+                    console.warn("[CalendarStore] next parse error:", e);
                     store.isLoading = false;
                 }
             }
@@ -107,19 +108,27 @@ Item {
         id: fetchAgendaProc
         command: [constants.coreScriptPath, "agenda", "get", "--past", String(store.agendaPastDays), "--future", String(store.agendaFutureDays)]
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var events = JSON.parse(trimmed);
                     if (Array.isArray(events)) {
+                        events.sort((a, b) => {
+                            var dayA = store.dateKey(store.eventDate(a.start, a.allDay));
+                            var dayB = store.dateKey(store.eventDate(b.start, b.allDay));
+                            if (dayA !== dayB) return dayA - dayB;
+                            if ((a.allDay === true) !== (b.allDay === true)) return a.allDay ? -1 : 1;
+                            return store.eventDate(a.start, a.allDay) - store.eventDate(b.start, b.allDay);
+                        });
                         store.agendaEvents = events;
                         store.agendaModel = store.buildAgenda(events);
                         store.agendaLoading = false;
                         store.hasSyncError = false;
                     }
                 } catch (e) {
+                    console.warn("[CalendarStore] agenda parse error:", e);
                     store.agendaLoading = false;
                 }
             }

@@ -16,11 +16,12 @@ import "./components/ai"
 PluginComponent {
     id: root
 
-    DankCalendarConstants { id: constants }
+    DankCalendarConstants { id: constantsItem }
+    readonly property DankCalendarConstants constants: constantsItem
 
     // State Stores
     CalendarStore {
-        id: calendarStore
+        id: calendarStoreItem
         refreshInterval: (pluginData.refreshInterval || 30) * 1000
         lookAheadDays: pluginData.lookAheadDays || 1
         nowWindowMinutes: pluginData.nowWindowMinutes ?? 5
@@ -29,20 +30,25 @@ PluginComponent {
     }
 
     TaskStore {
-        id: taskStore
+        id: taskStoreItem
     }
 
     ProviderStore {
-        id: providerStore
+        id: providerStoreItem
     }
 
     AiStore {
-        id: aiStore
+        id: aiStoreItem
         onProposalConfirmed: {
-            calendarStore.refreshAll();
-            taskStore.fetchTasks();
+            calendarStoreItem.refreshAll();
+            taskStoreItem.fetchTasks();
         }
     }
+
+    readonly property alias calendarStore: calendarStoreItem
+    readonly property alias taskStore: taskStoreItem
+    readonly property alias providerStore: providerStoreItem
+    readonly property alias aiStore: aiStoreItem
 
     // Module State Persistence
     PluginGlobalVar {
@@ -72,8 +78,8 @@ PluginComponent {
     }
 
     function refreshAll() {
-        calendarStore.refreshAll();
-        taskStore.fetchTasks();
+        calendarStoreItem.refreshAll();
+        taskStoreItem.fetchTasks();
     }
 
     function toggleDcal() {
@@ -85,12 +91,12 @@ PluginComponent {
     }
 
     function showEventTooltip(targetItem) {
-        if (!calendarStore.hasEvent) return;
-        var s = calendarStore.eventDate(calendarStore.eventStart, calendarStore.eventAllDay);
-        var day = calendarStore.formatLocalDate(s, "dddd d MMMM");
-        var time = calendarStore.eventAllDay ? "All day" : (Qt.formatTime(s, "HH:mm") + (calendarStore.eventEnd ? "–" + Qt.formatTime(calendarStore.eventDate(calendarStore.eventEnd, false), "HH:mm") : ""));
-        var tooltipText = calendarStore.eventSummary + "\n" + day + " · " + time;
-        if (calendarStore.eventLocation) tooltipText += "\n📍 " + calendarStore.eventLocation;
+        if (!calendarStoreItem.hasEvent) return;
+        var s = calendarStoreItem.eventDate(calendarStoreItem.eventStart, calendarStoreItem.eventAllDay);
+        var day = calendarStoreItem.formatLocalDate(s, "dddd d MMMM");
+        var time = calendarStoreItem.eventAllDay ? "All day" : (Qt.formatTime(s, "HH:mm") + (calendarStoreItem.eventEnd ? "–" + Qt.formatTime(calendarStoreItem.eventDate(calendarStoreItem.eventEnd, false), "HH:mm") : ""));
+        var tooltipText = calendarStoreItem.eventSummary + "\n" + day + " · " + time;
+        if (calendarStoreItem.eventLocation) tooltipText += "\n📍 " + calendarStoreItem.eventLocation;
         TooltipService.show(targetItem, tooltipText);
     }
 
@@ -107,10 +113,10 @@ PluginComponent {
 
             // 1. Popout Top Header
             PopoutHeader {
-                calendarStore: calendarStore
-                taskStore: taskStore
+                calendarStore: root.calendarStore
+                taskStore: root.taskStore
                 activeModule: root.activeModule
-                isRefreshing: calendarStore.isLoading
+                isRefreshing: root.calendarStore ? root.calendarStore.isLoading : false
                 onNewEventRequested: {
                     root.newEvent();
                     if (popout.closePopout) popout.closePopout();
@@ -132,7 +138,7 @@ PluginComponent {
             // 2. Tab Switcher
             PopoutTabBar {
                 activeModule: root.activeModule
-                pendingTasksCount: taskStore.pendingTasksCount
+                pendingTasksCount: root.taskStore ? root.taskStore.pendingTasksCount : 0
                 onTabSelected: (mod) => {
                     globalActiveModule.set(mod);
                     if (mod === "agenda" || mod === "tasks") {
@@ -143,10 +149,10 @@ PluginComponent {
 
             // 3. Error Banner (if any)
             Rectangle {
-                visible: calendarStore.hasSyncError
+                visible: root.calendarStore ? root.calendarStore.hasSyncError : false
                 width: parent.width - Theme.spacingS * 2
                 anchors.horizontalCenter: parent.horizontalCenter
-                height: 32
+                height: visible ? 32 : 0
                 radius: Theme.cornerRadiusSmall
                 color: Theme.withAlpha(Theme.error, 0.15)
                 border.width: 1
@@ -167,7 +173,7 @@ PluginComponent {
 
                     StyledText {
                         width: parent.width - 60
-                        text: calendarStore.syncErrorMessage || "同步失败"
+                        text: root.calendarStore ? root.calendarStore.syncErrorMessage : "同步失败"
                         font.pixelSize: Theme.fontSizeSmall - 1
                         color: Theme.error
                         elide: Text.ElideRight
@@ -193,9 +199,9 @@ PluginComponent {
             AgendaView {
                 id: agendaViewItem
                 visible: root.activeModule === "agenda"
-                calendarStore: calendarStore
+                calendarStore: root.calendarStore
                 width: parent.width
-                height: constants.defaultContentHeight
+                height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
                 onCloseRequested: {
                     if (popout.closePopout) popout.closePopout();
                 }
@@ -208,9 +214,9 @@ PluginComponent {
             TasksView {
                 id: tasksViewItem
                 visible: root.activeModule === "tasks"
-                taskStore: taskStore
+                taskStore: root.taskStore
                 width: parent.width
-                height: constants.defaultContentHeight
+                height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
                 onCloseRequested: {
                     if (popout.closePopout) popout.closePopout();
                 }
@@ -219,11 +225,11 @@ PluginComponent {
             ChatView {
                 id: chatViewItem
                 visible: root.activeModule === "ai"
-                aiStore: aiStore
-                providerStore: providerStore
-                batchScriptPath: constants.coreScriptPath
+                aiStore: root.aiStore
+                providerStore: root.providerStore
+                batchScriptPath: root.constants ? root.constants.coreScriptPath : ""
                 width: parent.width
-                height: constants.defaultContentHeight
+                height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
                 onScheduleConfirmed: root.refreshAll()
             }
         }
@@ -232,14 +238,14 @@ PluginComponent {
     // Horizontal Bar Pill
     horizontalBarPill: Component {
         HorizontalBarPill {
-            calendarStore: calendarStore
-            taskStore: taskStore
+            calendarStore: root.calendarStore
+            taskStore: root.taskStore
             barModule: root.barModule
-            pillMaxWidth: pluginData.pillMaxWidth || constants.defaultPillMaxWidth
+            pillMaxWidth: pluginData.pillMaxWidth || (root.constants ? root.constants.defaultPillMaxWidth : 160)
             dynamicWidth: pluginData.dynamicWidth ?? false
             scrollTitle: pluginData.scrollTitle ?? true
             pillDisplayMode: pluginData.pillDisplayMode || "full"
-            iconSize: constants.defaultIconSize
+            iconSize: root.constants ? root.constants.defaultIconSize : 18
             onCycleRequested: root.cycleModule()
             onHoverRequested: (target) => {
                 if (pluginData.showTooltip ?? true) root.showEventTooltip(target);
@@ -251,11 +257,11 @@ PluginComponent {
     // Vertical Bar Pill
     verticalBarPill: Component {
         VerticalBarPill {
-            calendarStore: calendarStore
-            taskStore: taskStore
+            calendarStore: root.calendarStore
+            taskStore: root.taskStore
             barModule: root.barModule
             widgetThickness: root.widgetThickness
-            iconSize: constants.defaultIconSize
+            iconSize: root.constants ? root.constants.defaultIconSize : 18
             onCycleRequested: root.cycleModule()
             onHoverRequested: (target) => {
                 if (pluginData.showTooltip ?? true) root.showEventTooltip(target);
