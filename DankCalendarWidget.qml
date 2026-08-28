@@ -48,7 +48,12 @@ PluginComponent {
     readonly property alias calendarStore: calendarStoreItem
     readonly property alias taskStore: taskStoreItem
     readonly property alias providerStore: providerStoreItem
-    readonly property alias aiStore: aiStoreItem
+    // AI & Backend Script Paths
+    property string aiScriptPath: Qt.resolvedUrl("./ai-client").toString().replace(/^file:\/\//, "")
+    property string batchScriptPath: Qt.resolvedUrl("./batch-create-items").toString().replace(/^file:\/\//, "")
+    property string sessionScriptPath: Qt.resolvedUrl("./session-manager").toString().replace(/^file:\/\//, "")
+    property string pasteHelperPath: Qt.resolvedUrl("./clipboard-paste-helper").toString().replace(/^file:\/\//, "")
+    property string providerScriptPath: Qt.resolvedUrl("./provider-manager").toString().replace(/^file:\/\//, "")
 
     // Module State Persistence
     PluginGlobalVar {
@@ -412,9 +417,11 @@ PluginComponent {
                     ChatView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        aiStore: root.aiStore
-                        providerStore: root.providerStore
-                        batchScriptPath: root.constants ? root.constants.coreScriptPath : ""
+                        aiScriptPath: root.aiScriptPath
+                        batchScriptPath: root.batchScriptPath
+                        sessionScriptPath: root.sessionScriptPath
+                        pasteHelperPath: root.pasteHelperPath
+                        providerScriptPath: root.providerScriptPath
                         onScheduleConfirmed: root.refreshAll()
                     }
                 }
@@ -503,9 +510,11 @@ PluginComponent {
             // 5. AI Assistant View
             ChatView {
                 visible: root.activeModule === "ai"
-                aiStore: root.aiStore
-                providerStore: root.providerStore
-                batchScriptPath: root.constants ? root.constants.coreScriptPath : ""
+                aiScriptPath: root.aiScriptPath
+                batchScriptPath: root.batchScriptPath
+                sessionScriptPath: root.sessionScriptPath
+                pasteHelperPath: root.pasteHelperPath
+                providerScriptPath: root.providerScriptPath
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
                 onScheduleConfirmed: root.refreshAll()
