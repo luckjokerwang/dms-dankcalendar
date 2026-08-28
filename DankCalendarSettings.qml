@@ -33,9 +33,9 @@ PluginSettings {
         id: testModelsProc
         command: []
         running: false
-        stdout: SplitParser {
-            onRead: (line) => {
-                var trimmed = line.trim();
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
                 if (!trimmed) return;
                 try {
                     var res = JSON.parse(trimmed);
@@ -102,7 +102,7 @@ PluginSettings {
     // ==========================================
     // 1. AI 动态服务商与模型管理中心
     // ==========================================
-    StyledRect {
+    Rectangle {
         width: parent.width
         implicitHeight: providerCol.implicitHeight + Theme.spacingM * 2
         color: Theme.surfaceContainer
@@ -112,8 +112,9 @@ PluginSettings {
 
         Column {
             id: providerCol
-            anchors.fill: parent
-            anchors.margins: Theme.spacingM
+            width: parent.width - Theme.spacingM * 2
+            x: Theme.spacingM
+            y: Theme.spacingM
             spacing: Theme.spacingM
 
             // Header & Add Custom Button
@@ -145,7 +146,7 @@ PluginSettings {
                     }
                 }
 
-                StyledRect {
+                Rectangle {
                     implicitWidth: addCustomBtnRow.implicitWidth + Theme.spacingM * 2
                     implicitHeight: 32
                     radius: 8
@@ -175,7 +176,7 @@ PluginSettings {
             // Preset Pills
             Column {
                 width: parent.width
-                spacing: 4
+                spacing: 6
 
                 StyledText {
                     text: "预置大厂快捷配置 (点击即可调起配置表单并填 Key):"
@@ -189,7 +190,7 @@ PluginSettings {
 
                     Repeater {
                         model: providerStore.presetList
-                        delegate: StyledRect {
+                        delegate: Rectangle {
                             required property var modelData
                             readonly property bool isConfigured: {
                                 for (var i = 0; i < providerStore.allProviders.length; i++) {
@@ -241,280 +242,282 @@ PluginSettings {
                         }
                     }
                 }
+            }
 
-                // Inline Edit / Add Form
-                StyledRect {
-                    visible: root.showEditForm
-                    width: parent.width
-                    implicitHeight: editFormCol.implicitHeight + Theme.spacingM * 2
-                    radius: Theme.cornerRadiusSmall
-                    color: Theme.surfaceContainerLowest
-                    border.width: 1
-                    border.color: Theme.primary
+            // Inline Edit / Add Form
+            Rectangle {
+                visible: root.showEditForm
+                width: parent.width
+                implicitHeight: visible ? (editFormCol.implicitHeight + Theme.spacingM * 2) : 0
+                radius: Theme.cornerRadiusSmall
+                color: Theme.surfaceContainerLowest
+                border.width: 1
+                border.color: Theme.primary
 
-                    Column {
-                        id: editFormCol
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingM
-                        spacing: Theme.spacingS
+                Column {
+                    id: editFormCol
+                    width: parent.width - Theme.spacingM * 2
+                    x: Theme.spacingM
+                    y: Theme.spacingM
+                    spacing: Theme.spacingS
 
-                        RowLayout {
-                            width: parent.width
-                            StyledText {
-                                text: root.isEditingProvider ? ("✏️ 编辑服务商: " + root.editProviderId) : "➕ 添加新服务商"
-                                font.pixelSize: Theme.fontSizeSmall
-                                font.weight: Font.Bold
-                                color: Theme.primary
-                            }
-                            Item { Layout.fillWidth: true }
-                            DankActionButton {
-                                iconName: "close"
-                                onClicked: root.showEditForm = false
-                            }
-                        }
-
-                        StyledText { text: "服务商 ID (英文小写标识):"; font.pixelSize: 11; color: Theme.surfaceVariantText }
-                        DankTextField {
-                            width: parent.width
-                            text: root.editProviderId
-                            placeholderText: "openai / deepseek / custom"
-                            enabled: !root.isEditingProvider
-                            onTextChanged: root.editProviderId = text
-                        }
-
-                        StyledText { text: "显示名称:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
-                        DankTextField {
-                            width: parent.width
-                            text: root.editProviderName
-                            placeholderText: "OpenAI / 官方端点"
-                            onTextChanged: root.editProviderName = text
-                        }
-
-                        StyledText { text: "API Base URL:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
-                        DankTextField {
-                            width: parent.width
-                            text: root.editProviderBaseUrl
-                            placeholderText: "https://api.openai.com/v1"
-                            onTextChanged: root.editProviderBaseUrl = text
-                        }
-
-                        StyledText { text: "API Key (密匙):"; font.pixelSize: 11; color: Theme.surfaceVariantText }
-                        DankTextField {
-                            width: parent.width
-                            text: root.editProviderApiKey
-                            placeholderText: "sk-..."
-                            echoMode: TextInput.Password
-                            onTextChanged: root.editProviderApiKey = text
-                        }
-
+                    RowLayout {
+                        width: parent.width
                         StyledText {
-                            visible: !!root.testResultText
-                            width: parent.width
-                            text: root.testResultText
-                            font.pixelSize: 11
-                            color: root.testSuccess ? "#4caf50" : Theme.error
-                            wrapMode: Text.Wrap
+                            text: root.isEditingProvider ? ("✏️ 编辑服务商: " + root.editProviderId) : "➕ 添加新服务商"
+                            font.pixelSize: Theme.fontSizeSmall
+                            font.weight: Font.Bold
+                            color: Theme.primary
                         }
+                        Item { Layout.fillWidth: true }
+                        DankActionButton {
+                            iconName: "close"
+                            onClicked: root.showEditForm = false
+                        }
+                    }
 
-                        RowLayout {
-                            width: parent.width
-                            spacing: Theme.spacingM
+                    StyledText { text: "服务商 ID (英文小写标识):"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        width: parent.width
+                        text: root.editProviderId
+                        placeholderText: "openai / deepseek / custom"
+                        enabled: !root.isEditingProvider
+                        onTextChanged: root.editProviderId = text
+                    }
 
-                            StyledRect {
-                                implicitWidth: 140
-                                implicitHeight: 32
-                                radius: 6
-                                color: Theme.surfaceContainerHigh
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: root.isTesting ? "⏳ 测试中..." : "🔍 测试并拉取模型"
-                                    font.pixelSize: 11
-                                    font.weight: Font.Medium
-                                    color: Theme.surfaceText
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        root.isTesting = true;
-                                        root.testResultText = "⏳ 正在连接测试端点...";
-                                        testModelsProc.command = [
-                                            Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
-                                            "provider", "fetch-models",
-                                            "--id", root.editProviderId,
-                                            "--base-url", root.editProviderBaseUrl,
-                                            "--api-key", root.editProviderApiKey
-                                        ];
-                                        testModelsProc.running = true;
-                                    }
+                    StyledText { text: "显示名称:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        width: parent.width
+                        text: root.editProviderName
+                        placeholderText: "OpenAI / 官方端点"
+                        onTextChanged: root.editProviderName = text
+                    }
+
+                    StyledText { text: "API Base URL:"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        width: parent.width
+                        text: root.editProviderBaseUrl
+                        placeholderText: "https://api.openai.com/v1"
+                        onTextChanged: root.editProviderBaseUrl = text
+                    }
+
+                    StyledText { text: "API Key (密匙):"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        width: parent.width
+                        text: root.editProviderApiKey
+                        placeholderText: "sk-..."
+                        echoMode: TextInput.Password
+                        onTextChanged: root.editProviderApiKey = text
+                    }
+
+                    StyledText {
+                        visible: !!root.testResultText
+                        width: parent.width
+                        text: root.testResultText
+                        font.pixelSize: 11
+                        color: root.testSuccess ? "#4caf50" : Theme.error
+                        wrapMode: Text.Wrap
+                    }
+
+                    RowLayout {
+                        width: parent.width
+                        spacing: Theme.spacingM
+
+                        Rectangle {
+                            implicitWidth: 140
+                            implicitHeight: 32
+                            radius: 6
+                            color: Theme.surfaceContainerHigh
+                            StyledText {
+                                anchors.centerIn: parent
+                                text: root.isTesting ? "⏳ 测试中..." : "🔍 测试并拉取模型"
+                                font.pixelSize: 11
+                                font.weight: Font.Medium
+                                color: Theme.surfaceText
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.isTesting = true;
+                                    root.testResultText = "⏳ 正在连接测试端点...";
+                                    testModelsProc.command = [
+                                        Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
+                                        "provider", "fetch-models",
+                                        "--id", root.editProviderId,
+                                        "--base-url", root.editProviderBaseUrl,
+                                        "--api-key", root.editProviderApiKey
+                                    ];
+                                    testModelsProc.running = true;
                                 }
                             }
+                        }
 
-                            Item { Layout.fillWidth: true }
+                        Item { Layout.fillWidth: true }
 
-                            StyledRect {
-                                implicitWidth: 100
-                                implicitHeight: 32
-                                radius: 6
-                                color: Theme.primary
-                                StyledText {
-                                    anchors.centerIn: parent
-                                    text: "💾 保存配置"
-                                    font.pixelSize: 11
-                                    font.weight: Font.Bold
-                                    color: "#ffffff"
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        var pId = root.editProviderId.trim().toLowerCase();
-                                        if (!pId) {
-                                            root.testResultText = "❌ Provider ID 不能为空";
-                                            return;
-                                        }
-                                        var pObj = {
-                                            "id": pId,
-                                            "name": root.editProviderName.trim() || pId,
-                                            "baseUrl": root.editProviderBaseUrl.trim(),
-                                            "apiKey": root.editProviderApiKey.trim(),
-                                            "enabled": true,
-                                            "icon": "smart_toy",
-                                            "color": "#1565c0",
-                                            "models": []
-                                        };
-                                        providerStore.saveProvider(pObj);
-                                        root.showEditForm = false;
+                        Rectangle {
+                            implicitWidth: 100
+                            implicitHeight: 32
+                            radius: 6
+                            color: Theme.primary
+                            StyledText {
+                                anchors.centerIn: parent
+                                text: "💾 保存配置"
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                color: "#ffffff"
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    var pId = root.editProviderId.trim().toLowerCase();
+                                    if (!pId) {
+                                        root.testResultText = "❌ Provider ID 不能为空";
+                                        return;
                                     }
+                                    var pObj = {
+                                        "id": pId,
+                                        "name": root.editProviderName.trim() || pId,
+                                        "baseUrl": root.editProviderBaseUrl.trim(),
+                                        "apiKey": root.editProviderApiKey.trim(),
+                                        "enabled": true,
+                                        "icon": "smart_toy",
+                                        "color": "#1565c0",
+                                        "models": []
+                                    };
+                                    providerStore.saveProvider(pObj);
+                                    root.showEditForm = false;
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // Configured Providers List
-                Column {
-                    width: parent.width
-                    spacing: Theme.spacingS
+            // Configured Providers List
+            Column {
+                width: parent.width
+                spacing: Theme.spacingS
 
-                    StyledText {
-                        text: "已配置的服务商列表:"
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.weight: Font.Bold
-                        color: Theme.surfaceText
-                    }
+                StyledText {
+                    text: "已配置的服务商列表:"
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.weight: Font.Bold
+                    color: Theme.surfaceText
+                }
 
-                    Repeater {
-                        model: providerStore.allProviders
-                        delegate: StyledRect {
-                            id: provCard
-                            required property var modelData
-                            readonly property bool isPrimary: providerStore.activeProviderId === modelData.id
+                Repeater {
+                    model: providerStore.allProviders
+                    delegate: Rectangle {
+                        id: provCard
+                        required property var modelData
+                        readonly property bool isPrimary: providerStore.activeProviderId === modelData.id
 
-                            width: providerCol.width
-                            implicitHeight: provCardCol.implicitHeight + Theme.spacingM * 2
-                            radius: Theme.cornerRadiusSmall
-                            color: isPrimary ? Theme.withAlpha(Theme.primary, 0.08) : Theme.surfaceContainerLowest
-                            border.width: isPrimary ? 1.5 : 1
-                            border.color: isPrimary ? Theme.primary : Theme.outlineVariant
+                        width: providerCol.width
+                        implicitHeight: provCardCol.implicitHeight + Theme.spacingM * 2
+                        radius: Theme.cornerRadiusSmall
+                        color: isPrimary ? Theme.withAlpha(Theme.primary, 0.08) : Theme.surfaceContainerLowest
+                        border.width: isPrimary ? 1.5 : 1
+                        border.color: isPrimary ? Theme.primary : Theme.outlineVariant
 
-                            Column {
-                                id: provCardCol
-                                anchors.fill: parent
-                                anchors.margins: Theme.spacingM
+                        Column {
+                            id: provCardCol
+                            width: parent.width - Theme.spacingM * 2
+                            x: Theme.spacingM
+                            y: Theme.spacingM
+                            spacing: Theme.spacingS
+
+                            RowLayout {
+                                width: parent.width
                                 spacing: Theme.spacingS
 
-                                RowLayout {
-                                    width: parent.width
-                                    spacing: Theme.spacingS
+                                DankIcon {
+                                    name: modelData.icon || "smart_toy"
+                                    size: 20
+                                    color: modelData.color || Theme.primary
+                                }
 
-                                    DankIcon {
-                                        name: modelData.icon || "smart_toy"
-                                        size: 20
-                                        color: modelData.color || Theme.primary
-                                    }
+                                Column {
+                                    Layout.fillWidth: true
+                                    spacing: 1
 
-                                    Column {
-                                        Layout.fillWidth: true
-                                        spacing: 1
-
-                                        RowLayout {
-                                            spacing: 6
-                                            StyledText {
-                                                text: modelData.name || modelData.id
-                                                font.pixelSize: Theme.fontSizeSmall
-                                                font.weight: Font.Bold
-                                                color: Theme.surfaceText
-                                            }
-
-                                            StyledRect {
-                                                visible: isPrimary
-                                                implicitWidth: primTxt.implicitWidth + 8
-                                                implicitHeight: 18
-                                                radius: 4
-                                                color: Theme.primary
-                                                StyledText {
-                                                    id: primTxt
-                                                    anchors.centerIn: parent
-                                                    text: "当前激活"
-                                                    font.pixelSize: 10
-                                                    font.weight: Font.Bold
-                                                    color: "#ffffff"
-                                                }
-                                            }
-                                        }
-
+                                    RowLayout {
+                                        spacing: 6
                                         StyledText {
-                                            text: modelData.baseUrl || ""
-                                            font.pixelSize: 11
-                                            color: Theme.surfaceVariantText
-                                            elide: Text.ElideRight
+                                            text: modelData.name || modelData.id
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.weight: Font.Bold
+                                            color: Theme.surfaceText
+                                        }
+
+                                        Rectangle {
+                                            visible: isPrimary
+                                            implicitWidth: primTxt.implicitWidth + 8
+                                            implicitHeight: 18
+                                            radius: 4
+                                            color: Theme.primary
+                                            StyledText {
+                                                id: primTxt
+                                                anchors.centerIn: parent
+                                                text: "当前激活"
+                                                font.pixelSize: 10
+                                                font.weight: Font.Bold
+                                                color: "#ffffff"
+                                            }
                                         }
                                     }
 
-                                    // Action Buttons
-                                    DankActionButton {
-                                        iconName: "edit"
-                                        onClicked: root.openEditProvider(modelData)
-                                    }
-
-                                    DankActionButton {
-                                        iconName: "delete"
-                                        visible: modelData.id !== "agnes"
-                                        onClicked: providerStore.deleteProvider(modelData.id)
+                                    StyledText {
+                                        text: modelData.baseUrl || ""
+                                        font.pixelSize: 11
+                                        color: Theme.surfaceVariantText
+                                        elide: Text.ElideRight
                                     }
                                 }
 
-                                // Model Chips
-                                Flow {
-                                    width: parent.width
-                                    spacing: 4
-                                    Repeater {
-                                        model: modelData.models || []
-                                        delegate: StyledRect {
-                                            required property var modelData
-                                            readonly property bool isSelected: providerStore.activeModelId === modelData.id && provCard.isPrimary
+                                // Action Buttons
+                                DankActionButton {
+                                    iconName: "edit"
+                                    onClicked: root.openEditProvider(modelData)
+                                }
 
-                                            implicitWidth: mTxt.implicitWidth + 12
-                                            implicitHeight: 22
-                                            radius: 4
-                                            color: isSelected ? Theme.primary : Theme.surfaceContainerHigh
+                                DankActionButton {
+                                    iconName: "delete"
+                                    visible: modelData.id !== "agnes"
+                                    onClicked: providerStore.deleteProvider(modelData.id)
+                                }
+                            }
 
-                                            StyledText {
-                                                id: mTxt
-                                                anchors.centerIn: parent
-                                                text: modelData.name || modelData.id
-                                                font.pixelSize: 10
-                                                font.weight: isSelected ? Font.Bold : Font.Normal
-                                                color: isSelected ? "#ffffff" : Theme.surfaceText
-                                            }
+                            // Model Chips
+                            Flow {
+                                width: parent.width
+                                spacing: 4
+                                Repeater {
+                                    model: modelData.models || []
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        readonly property bool isSelected: providerStore.activeModelId === modelData.id && provCard.isPrimary
 
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    providerStore.setActive(provCard.modelData.id, modelData.id);
-                                                }
+                                        implicitWidth: mTxt.implicitWidth + 12
+                                        implicitHeight: 22
+                                        radius: 4
+                                        color: isSelected ? Theme.primary : Theme.surfaceContainerHigh
+
+                                        StyledText {
+                                            id: mTxt
+                                            anchors.centerIn: parent
+                                            text: modelData.name || modelData.id
+                                            font.pixelSize: 10
+                                            font.weight: isSelected ? Font.Bold : Font.Normal
+                                            color: isSelected ? "#ffffff" : Theme.surfaceText
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                providerStore.setActive(provCard.modelData.id, modelData.id);
                                             }
                                         }
                                     }
@@ -528,64 +531,46 @@ PluginSettings {
     }
 
     // ==========================================
-    // 2. 日历常规配置
+    // 2. 日历常规配置 (使用标准 PluginSettings 组件)
     // ==========================================
-    StyledRect {
-        width: parent.width
-        implicitHeight: genCol.implicitHeight + Theme.spacingM * 2
-        color: Theme.surfaceContainer
-        radius: Theme.cornerRadius
-        border.color: Theme.outline
-        border.width: 1
+    StyledText {
+        text: "📅 日历常规设置"
+        font.pixelSize: Theme.fontSizeMedium
+        font.weight: Font.Bold
+        color: Theme.surfaceText
+    }
 
-        Column {
-            id: genCol
-            anchors.fill: parent
-            anchors.margins: Theme.spacingM
-            spacing: Theme.spacingM
+    SliderSetting {
+        settingKey: "refreshInterval"
+        label: "刷新间隔"
+        description: "后台轮询日历与待办变更的周期 (默认 30 秒)"
+        defaultValue: 30
+        minimum: 5
+        maximum: 300
+        unit: "s"
+    }
 
-            StyledText {
-                text: "📅 日历常规设置"
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.Bold
-                color: Theme.surfaceText
-            }
+    SliderSetting {
+        settingKey: "pillMaxWidth"
+        label: "顶栏胶囊最大宽度"
+        description: "顶栏显示事件标题的最大宽度 (默认 160px)"
+        defaultValue: 160
+        minimum: 80
+        maximum: 400
+        unit: "px"
+    }
 
-            DankSpinBox {
-                width: parent.width
-                label: "刷新间隔 (秒)"
-                description: "后台轮询日历与待办变更的周期 (默认 30 秒)"
-                value: root.loadValue("refreshInterval", 30)
-                minimumValue: 5
-                maximumValue: 300
-                onValueChanged: root.saveValue("refreshInterval", value)
-            }
+    ToggleSetting {
+        settingKey: "dynamicWidth"
+        label: "动态宽度适应"
+        description: "短标题自动收缩胶囊宽度，避免占用过多顶栏空间"
+        defaultValue: false
+    }
 
-            DankSpinBox {
-                width: parent.width
-                label: "顶栏胶囊最大宽度 (px)"
-                description: "顶栏显示事件标题的最大宽度 (默认 160px)"
-                value: root.loadValue("pillMaxWidth", 160)
-                minimumValue: 80
-                maximumValue: 400
-                onValueChanged: root.saveValue("pillMaxWidth", value)
-            }
-
-            DankSwitch {
-                width: parent.width
-                text: "动态宽度适应"
-                description: "短标题自动收缩胶囊宽度，避免占用过多顶栏空间"
-                checked: root.loadValue("dynamicWidth", false)
-                onCheckedChanged: root.saveValue("dynamicWidth", checked)
-            }
-
-            DankSwitch {
-                width: parent.width
-                text: "长标题滚动动画"
-                description: "当事件标题超出宽度时，在顶栏自动横向来回平滑滚动"
-                checked: root.loadValue("scrollTitle", true)
-                onCheckedChanged: root.saveValue("scrollTitle", checked)
-            }
-        }
+    ToggleSetting {
+        settingKey: "scrollTitle"
+        label: "长标题滚动动画"
+        description: "当事件标题超出宽度时，在顶栏自动横向来回平滑滚动"
+        defaultValue: true
     }
 }

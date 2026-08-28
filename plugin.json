@@ -2,7 +2,7 @@
   "id": "dankCalendarPlus",
   "name": "Dank Calendar Plus",
   "description": "Next-event countdown & full tasks manager for dcal: dual-mode bar pill, interactive agenda & tasks popout with priority tagging and instant synchronization",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "author": "luckjokerwang (based on arqueon / Leonardo Amaro)",
   "icon": "calendar_today",
   "type": "widget",
@@ -23,4 +23,3 @@
     "python3"
   ]
 }
-
