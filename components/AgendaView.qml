@@ -1,12 +1,17 @@
 import QtQuick
+import Quickshell
 import qs.Common
 import qs.Widgets
+import "../store"
 
 Item {
     id: agendaView
 
-    property var rootWidget: null
-    signal closeRequested
+    property CalendarStore calendarStore: null
+    property var rootWidget: null // Backward compatibility alias
+    readonly property CalendarStore activeStore: calendarStore || (rootWidget ? rootWidget.calendarStore : null)
+
+    signal closeRequested()
 
     implicitWidth: parent ? parent.width : 420
     implicitHeight: visible ? 420 : 0
@@ -19,20 +24,16 @@ Item {
 
     DankFlickable {
         id: agendaFlick
-
         anchors.fill: parent
         anchors.margins: Theme.spacingS
         contentHeight: eventColumn.implicitHeight
         clip: true
 
-        // Open the list scrolled to today, not to the oldest past day.
-        // DMS keeps popout contents warm after close, so reset on open.
         property bool userScrolled: false
-        readonly property real todayY: Math.max(0, Math.min(rootWidget ? rootWidget.agendaTodayOffset : 0, contentHeight - height))
+        readonly property real todayY: Math.max(0, Math.min(activeStore ? activeStore.agendaTodayOffset : 0, contentHeight - height))
 
         function pinToToday() {
-            if (!userScrolled)
-                contentY = todayY;
+            if (!userScrolled) contentY = todayY;
         }
 
         function resetToToday() {
@@ -48,7 +49,6 @@ Item {
 
         NumberAnimation {
             id: todayJumpAnim
-
             target: agendaFlick
             property: "contentY"
             duration: 250
@@ -57,31 +57,29 @@ Item {
 
         Column {
             id: eventColumn
-
             width: agendaFlick.width
             spacing: 2
 
             StyledText {
-                visible: rootWidget && rootWidget.agendaModel.length === 0
+                visible: activeStore && activeStore.agendaModel.length === 0
                 width: parent.width
-                text: (rootWidget && rootWidget.agendaLoading) ? "Loading events…" : "No events in this range."
+                text: (activeStore && activeStore.agendaLoading) ? "Loading events…" : "No events in this range."
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
             }
 
             Repeater {
-                model: rootWidget ? rootWidget.agendaModel : []
+                model: activeStore ? activeStore.agendaModel : []
 
                 delegate: Item {
                     id: agendaRow
-
                     required property var modelData
-                    readonly property string phase: (modelData.kind === "event" && rootWidget) ? rootWidget.eventPhase(modelData.ev) : ""
+                    readonly property string phase: (modelData.kind === "event" && activeStore) ? activeStore.eventPhase(modelData.ev) : ""
 
                     width: eventColumn.width
                     height: modelData.kind === "event" ? 52 : (modelData.kind === "day" ? 32 : 28)
 
-                    // Week divider: small label + hairline.
+                    // Week divider
                     Row {
                         visible: agendaRow.modelData.kind === "week"
                         anchors.left: parent.left
@@ -93,7 +91,6 @@ Item {
 
                         StyledText {
                             id: weekLabel
-
                             text: agendaRow.modelData.kind === "week" ? agendaRow.modelData.label : ""
                             font.pixelSize: Math.max(9, Math.round(Theme.fontSizeSmall * 0.85))
                             font.weight: Font.Medium
@@ -109,7 +106,7 @@ Item {
                         }
                     }
 
-                    // Day header: shaded band, today tinted primary.
+                    // Day header
                     Rectangle {
                         visible: agendaRow.modelData.kind === "day"
                         anchors.left: parent.left
@@ -130,10 +127,9 @@ Item {
                         }
                     }
 
-                    // Event row: click opens the event's details window in DankCalendar.
+                    // Event row
                     Rectangle {
                         id: eventRect
-
                         visible: agendaRow.modelData.kind === "event"
                         anchors.fill: parent
                         radius: Theme.cornerRadiusSmall
@@ -141,7 +137,6 @@ Item {
 
                         HoverHandler {
                             id: rowHover
-
                             enabled: eventRect.visible
                             cursorShape: Qt.PointingHandCursor
                         }
@@ -154,7 +149,6 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Theme.spacingS
 
-                            // Left Clickable Content Area
                             Item {
                                 id: eventContentItem
                                 width: parent.width - 28 - Theme.spacingS
@@ -192,54 +186,54 @@ Item {
                                         StyledText {
                                             width: parent.width
                                             text: {
-                                                if (agendaRow.modelData.kind !== "event" || !rootWidget)
-                                                    return "";
-
+                                                if (agendaRow.modelData.kind !== "event" || !activeStore) return "";
                                                 var ev = agendaRow.modelData.ev;
-                                                return rootWidget.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
+                                                return activeStore.eventTimeLabel(ev) + (agendaRow.phase === "now" ? "  ·  Now" : "") + (ev.location ? "  ·  " + ev.location : "");
                                             }
-                                            font.pixelSize: Theme.fontSizeSmall
-                                            color: agendaRow.phase === "now" ? "#66BB6A" : Theme.surfaceVariantText
+                                            font.pixelSize: Math.max(9, Math.round(Theme.fontSizeSmall * 0.85))
+                                            color: Theme.surfaceVariantText
                                             elide: Text.ElideRight
                                             maximumLineCount: 1
                                         }
                                     }
                                 }
 
-                                TapHandler {
-                                    onTapped: {
-                                        if (rootWidget) {
-                                            rootWidget.openEvent(agendaRow.modelData.ev);
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (agendaRow.modelData.kind === "event" && agendaRow.modelData.ev) {
+                                            var ev = agendaRow.modelData.ev;
+                                            Quickshell.execDetached(["dcal", "ipc", "ui.openEvent", "uid=" + ev.uid, "start=" + ev.start]);
+                                            agendaView.closeRequested();
                                         }
-                                        agendaView.closeRequested();
                                     }
                                 }
                             }
 
-                            // Delete Action Button (Task-style)
+                            // Delete Action Button
                             Rectangle {
-                                width: 28
-                                height: 28
-                                radius: 14
-                                color: delEvMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.15) : "transparent"
-                                visible: rowHover.hovered || delEvMouse.containsMouse
+                                width: 26
+                                height: 26
+                                radius: 13
+                                color: deleteMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
                                 anchors.verticalCenter: parent.verticalCenter
 
                                 DankIcon {
                                     name: "delete"
-                                    size: 16
-                                    color: delEvMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
+                                    size: 14
+                                    color: deleteMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
                                     anchors.centerIn: parent
                                 }
 
                                 MouseArea {
-                                    id: delEvMouse
+                                    id: deleteMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        if (rootWidget) {
-                                            rootWidget.deleteEvent(agendaRow.modelData.ev);
+                                        if (agendaRow.modelData.kind === "event" && agendaRow.modelData.ev && activeStore) {
+                                            activeStore.deleteEvent(agendaRow.modelData.ev);
                                         }
                                     }
                                 }
@@ -247,50 +241,6 @@ Item {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Floating "Today" chip: appears when the list is scrolled
-    // away from today and jumps back to it.
-    Rectangle {
-        visible: !todayJumpAnim.running && Math.abs(agendaFlick.contentY - agendaFlick.todayY) > 120
-        width: todayChipRow.implicitWidth + Theme.spacingM * 2
-        height: 28
-        radius: 14
-        color: Theme.primary
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.spacingM
-
-        Row {
-            id: todayChipRow
-
-            anchors.centerIn: parent
-            spacing: Theme.spacingXS
-
-            DankIcon {
-                name: agendaFlick.contentY > agendaFlick.todayY ? "arrow_upward" : "arrow_downward"
-                size: Theme.iconSizeSmall
-                color: Theme.primaryText
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            StyledText {
-                text: "Today"
-                font.pixelSize: Theme.fontSizeSmall
-                font.weight: Font.Medium
-                color: Theme.primaryText
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                todayJumpAnim.to = agendaFlick.todayY;
-                todayJumpAnim.restart();
             }
         }
     }

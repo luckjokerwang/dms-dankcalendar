@@ -3,12 +3,16 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Common
 import qs.Widgets
+import "../store"
 
 Item {
     id: tasksView
 
-    property var rootWidget: null
-    signal closeRequested
+    property TaskStore taskStore: null
+    property var rootWidget: null // Backward compatibility alias
+    readonly property TaskStore activeStore: taskStore || (rootWidget ? rootWidget.taskStore : null)
+
+    signal closeRequested()
 
     readonly property real maxListHeight: 420
     implicitWidth: parent ? parent.width : 420
@@ -18,16 +22,14 @@ Item {
     property bool showCompleted: false
 
     readonly property var filteredPendingTasks: {
-        var all = (rootWidget && rootWidget.pendingTasks) ? rootWidget.pendingTasks : [];
-        if (!filterCalendarId)
-            return all;
+        var all = (activeStore && activeStore.pendingTasks) ? activeStore.pendingTasks : [];
+        if (!filterCalendarId) return all;
         return all.filter(t => t.calendarId === filterCalendarId);
     }
 
     readonly property var filteredCompletedTasks: {
-        var all = (rootWidget && rootWidget.completedTasks) ? rootWidget.completedTasks : [];
-        if (!filterCalendarId)
-            return all;
+        var all = (activeStore && activeStore.completedTasks) ? activeStore.completedTasks : [];
+        if (!filterCalendarId) return all;
         return all.filter(t => t.calendarId === filterCalendarId);
     }
 
@@ -75,7 +77,7 @@ Item {
                         selectByMouse: true
 
                         Text {
-                            text: "添加新待办任务…"
+                            text: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
                             color: Theme.outlineButton
                             font.pixelSize: Theme.fontSizeSmall
                             visible: !taskTextInput.text && !taskTextInput.activeFocus
@@ -84,8 +86,8 @@ Item {
 
                         Keys.onReturnPressed: {
                             if (taskTextInput.text.trim()) {
-                                if (rootWidget)
-                                    rootWidget.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
+                                if (activeStore)
+                                    activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
                                 taskTextInput.text = "";
                             }
                         }
@@ -113,8 +115,8 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 if (taskTextInput.text.trim()) {
-                                    if (rootWidget)
-                                        rootWidget.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
+                                    if (activeStore)
+                                        activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
                                     taskTextInput.text = "";
                                 }
                             }
@@ -123,9 +125,9 @@ Item {
                 }
             }
 
-            // 2. Task Calendar Filter Pills (if multiple task lists exist)
+            // 2. Task Calendar Filter Pills
             Row {
-                visible: (rootWidget.taskCalendars || []).length > 1
+                visible: (activeStore && activeStore.taskCalendars && activeStore.taskCalendars.length > 1)
                 width: parent.width
                 spacing: Theme.spacingXS
 
@@ -152,7 +154,7 @@ Item {
                 }
 
                 Repeater {
-                    model: rootWidget.taskCalendars || []
+                    model: (activeStore && activeStore.taskCalendars) ? activeStore.taskCalendars : []
 
                     delegate: Rectangle {
                         height: 26
@@ -248,7 +250,7 @@ Item {
 
                                 DankIcon {
                                     name: checkMouse.containsMouse ? "check_circle" : "radio_button_unchecked"
-                                    size: 20
+                                    size: 18
                                     color: checkMouse.containsMouse ? Theme.primary : Theme.surfaceVariantText
                                     anchors.centerIn: parent
                                 }
@@ -259,111 +261,95 @@ Item {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        if (rootWidget)
-                                            rootWidget.completeTask(pendingRow.modelData.id, true);
+                                        if (activeStore)
+                                            activeStore.completeTask(pendingRow.modelData.id, true);
                                     }
                                 }
                             }
 
-                            // Task Text & Meta
+                            // Task Text & Meta Details
                             Column {
-                                width: parent.width - 28 - 32 - Theme.spacingS * 2
+                                width: parent.width - 28 - 28 - Theme.spacingS * 2
                                 spacing: 2
                                 anchors.verticalCenter: parent.verticalCenter
 
-                                StyledText {
-                                    width: parent.width
-                                    text: pendingRow.modelData.summary || "(无标题)"
-                                    font.pixelSize: Theme.fontSizeSmall
-                                    font.weight: Font.Medium
-                                    color: Theme.surfaceText
-                                    wrapMode: Text.WrapAnywhere
-                                    maximumLineCount: 3
-                                    elide: Text.ElideRight
-                                }
-
                                 Row {
+                                    width: parent.width
                                     spacing: Theme.spacingXS
-                                    visible: Boolean(pendingRow.modelData.priority && pendingRow.modelData.priority > 0) || Boolean(pendingRow.modelData.due) || Boolean(pendingRow.modelData.calendarName)
 
-                                    // Priority Badge
+                                    // Priority Indicator Badge
                                     Rectangle {
-                                        visible: Boolean(pendingRow.modelData.priority && pendingRow.modelData.priority > 0)
-                                        height: 18
-                                        width: prioText.implicitWidth + 8
-                                        radius: 4
-                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: (pendingRow.modelData.priority >= 1 && pendingRow.modelData.priority <= 9)
+                                        width: 14
+                                        height: 14
+                                        radius: 7
                                         color: {
-                                            var p = pendingRow.modelData.priority || 0;
-                                            if (p >= 1 && p <= 4) return Theme.withAlpha(Theme.error, 0.2);
-                                            if (p === 5) return Theme.withAlpha("#f59e0b", 0.2);
-                                            return Theme.withAlpha(Theme.primary, 0.2);
+                                            var p = pendingRow.modelData.priority;
+                                            if (p === 1) return "#ef5350";
+                                            if (p <= 5) return "#ffa726";
+                                            return "#42a5f5";
                                         }
+                                        anchors.verticalCenter: parent.verticalCenter
 
                                         StyledText {
-                                            id: prioText
                                             anchors.centerIn: parent
-                                            text: {
-                                                var p = pendingRow.modelData.priority || 0;
-                                                if (p >= 1 && p <= 4) return "高优";
-                                                if (p === 5) return "中优";
-                                                return "低优";
-                                            }
-                                            font.pixelSize: Theme.fontSizeSmall - 3
+                                            text: "!"
+                                            font.pixelSize: 10
                                             font.weight: Font.Bold
-                                            color: {
-                                                var p = pendingRow.modelData.priority || 0;
-                                                if (p >= 1 && p <= 4) return Theme.error;
-                                                if (p === 5) return "#f59e0b";
-                                                return Theme.primary;
-                                            }
+                                            color: "#ffffff"
                                         }
                                     }
 
                                     StyledText {
-                                        visible: Boolean(pendingRow.modelData.due)
-                                        text: {
-                                            if (!pendingRow.modelData.due) return "";
-                                            var d = new Date(pendingRow.modelData.due);
-                                            return "截止: " + Qt.formatDate(d, "M月d日");
-                                        }
-                                        font.pixelSize: Theme.fontSizeSmall - 2
-                                        color: Theme.primary
+                                        width: parent.width - 20
+                                        text: pendingRow.modelData.summary || ""
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.weight: Font.Medium
+                                        color: Theme.surfaceText
+                                        wrapMode: Text.Wrap
                                     }
+                                }
 
+                                // Calendar Name Tag / Due date
+                                Row {
+                                    spacing: Theme.spacingS
                                     StyledText {
-                                        visible: Boolean(pendingRow.modelData.calendarName)
-                                        text: ((Boolean(pendingRow.modelData.priority && pendingRow.modelData.priority > 0) || Boolean(pendingRow.modelData.due)) ? "·  " : "") + pendingRow.modelData.calendarName
+                                        text: pendingRow.modelData.calendarName || "Tasks"
                                         font.pixelSize: Theme.fontSizeSmall - 2
                                         color: Theme.surfaceVariantText
+                                    }
+                                    StyledText {
+                                        visible: !!pendingRow.modelData.due
+                                        text: "📅 " + (pendingRow.modelData.due || "")
+                                        font.pixelSize: Theme.fontSizeSmall - 2
+                                        color: Theme.primary
                                     }
                                 }
                             }
 
-                            // Delete Action Button
+                            // Delete Task Button
                             Rectangle {
                                 width: 28
                                 height: 28
                                 radius: 14
-                                color: delTaskMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.15) : "transparent"
-                                visible: rowHover.containsMouse
+                                color: delMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
                                 anchors.verticalCenter: parent.verticalCenter
 
                                 DankIcon {
                                     name: "delete"
                                     size: 16
-                                    color: delTaskMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
+                                    color: delMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
                                     anchors.centerIn: parent
                                 }
 
                                 MouseArea {
-                                    id: delTaskMouse
+                                    id: delMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        if (rootWidget)
-                                            rootWidget.deleteTask(pendingRow.modelData.id);
+                                        if (activeStore)
+                                            activeStore.deleteTask(pendingRow.modelData.id);
                                     }
                                 }
                             }
@@ -372,12 +358,13 @@ Item {
                 }
             }
 
-            // 5. Completed Tasks Collapsible Section
+            // 5. Completed Tasks Section
             Column {
                 width: parent.width
-                spacing: Theme.spacingS
+                spacing: Theme.spacingXS
                 visible: tasksView.filteredCompletedTasks.length > 0
 
+                // Header Toggle Button
                 Rectangle {
                     width: parent.width
                     height: 32
@@ -385,14 +372,14 @@ Item {
                     color: compHeaderMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
 
                     Row {
-                        anchors.left: parent.left
+                        anchors.fill: parent
                         anchors.leftMargin: Theme.spacingS
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacingXS
+                        anchors.rightMargin: Theme.spacingS
+                        spacing: Theme.spacingS
 
                         DankIcon {
                             name: tasksView.showCompleted ? "expand_more" : "chevron_right"
-                            size: 18
+                            size: 16
                             color: Theme.surfaceVariantText
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -415,23 +402,24 @@ Item {
                     }
                 }
 
-                // Completed tasks list
+                // Completed Task Items List
                 Column {
-                    visible: tasksView.showCompleted
                     width: parent.width
                     spacing: 2
+                    visible: tasksView.showCompleted
 
                     Repeater {
                         model: tasksView.filteredCompletedTasks
 
                         delegate: Rectangle {
-                            id: compRow
+                            id: completedRow
                             required property var modelData
 
                             width: parent.width
-                            implicitHeight: Math.max(40, compRowContent.implicitHeight + Theme.spacingS * 2)
+                            implicitHeight: Math.max(40, compContent.implicitHeight + Theme.spacingXS * 2)
                             radius: Theme.cornerRadiusSmall
                             color: compRowHover.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                            opacity: 0.7
 
                             MouseArea {
                                 id: compRowHover
@@ -440,7 +428,7 @@ Item {
                             }
 
                             Row {
-                                id: compRowContent
+                                id: compContent
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.leftMargin: Theme.spacingS
@@ -448,18 +436,18 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Theme.spacingS
 
-                                // Uncomplete Checkbox
+                                // Uncomplete Checkbox Button
                                 Rectangle {
-                                    width: 28
-                                    height: 28
-                                    radius: 14
-                                    color: uncheckMouse.containsMouse ? Theme.withAlpha(Theme.primary, 0.15) : "transparent"
+                                    width: 24
+                                    height: 24
+                                    radius: 12
+                                    color: "transparent"
                                     anchors.verticalCenter: parent.verticalCenter
 
                                     DankIcon {
                                         name: "check_circle"
-                                        size: 20
-                                        color: Theme.primary
+                                        size: 16
+                                        color: uncheckMouse.containsMouse ? Theme.surfaceVariantText : Theme.primary
                                         anchors.centerIn: parent
                                     }
 
@@ -469,42 +457,33 @@ Item {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            if (rootWidget)
-                                                rootWidget.completeTask(compRow.modelData.id, false);
+                                            if (activeStore)
+                                                activeStore.completeTask(completedRow.modelData.id, false);
                                         }
                                     }
                                 }
 
-                                // Task Text (Dimmed)
-                                Column {
-                                    width: parent.width - 28 - 32 - Theme.spacingS * 2
-                                    spacing: 1
+                                StyledText {
+                                    width: parent.width - 24 - 24 - Theme.spacingS * 2
+                                    text: completedRow.modelData.summary || ""
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.strikeout: true
+                                    color: Theme.surfaceVariantText
+                                    wrapMode: Text.Wrap
                                     anchors.verticalCenter: parent.verticalCenter
-
-                                    StyledText {
-                                        width: parent.width
-                                        text: compRow.modelData.summary || "(无标题)"
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        font.strikeout: true
-                                        color: Theme.surfaceVariantText
-                                        wrapMode: Text.WrapAnywhere
-                                        maximumLineCount: 3
-                                        elide: Text.ElideRight
-                                    }
                                 }
 
-                                // Delete Action
+                                // Delete Completed Task
                                 Rectangle {
-                                    width: 28
-                                    height: 28
-                                    radius: 14
-                                    color: delCompMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.15) : "transparent"
-                                    visible: compRowHover.containsMouse
+                                    width: 24
+                                    height: 24
+                                    radius: 12
+                                    color: delCompMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
                                     anchors.verticalCenter: parent.verticalCenter
 
                                     DankIcon {
                                         name: "delete"
-                                        size: 16
+                                        size: 14
                                         color: delCompMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
                                         anchors.centerIn: parent
                                     }
@@ -515,8 +494,8 @@ Item {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            if (rootWidget)
-                                                rootWidget.deleteTask(compRow.modelData.id);
+                                            if (activeStore)
+                                                activeStore.deleteTask(completedRow.modelData.id);
                                         }
                                     }
                                 }

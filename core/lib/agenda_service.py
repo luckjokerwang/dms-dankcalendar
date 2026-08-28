@@ -1,0 +1,95 @@
+"""
+agenda_service.py
+Service for calendar agenda queries, window calculation, and next-event countdown extraction.
+"""
+
+import datetime
+from typing import Dict, Any, List, Optional
+from .dcal_client import DcalClient
+from .types import EventItem, NextEventResult
+
+class AgendaService:
+    def __init__(self, dcal: Optional[DcalClient] = None):
+        self.dcal = dcal or DcalClient()
+
+    def get_agenda_events(self, past_days: int = 7, future_days: int = 30) -> List[Dict[str, Any]]:
+        now = datetime.datetime.now()
+        today = now.date()
+        start_day = today - datetime.timedelta(days=past_days)
+        end_day = today + datetime.timedelta(days=future_days)
+
+        start_dt = datetime.datetime(start_day.year, start_day.month, start_day.day, 0, 0, 0)
+        end_dt = datetime.datetime(end_day.year, end_day.month, end_day.day, 23, 59, 59)
+
+        from_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        to_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        return self.dcal.get_events(from_iso, to_iso)
+
+    def get_next_event(self, look_ahead_days: int = 1, now_window_mins: int = 5) -> Optional[NextEventResult]:
+        now = datetime.datetime.now()
+        today = now.date()
+        end_day = today + datetime.timedelta(days=look_ahead_days)
+
+        from_iso = datetime.datetime(today.year, today.month, today.day, 0, 0, 0).strftime("%Y-%m-%dT%H:%M:%SZ")
+        to_iso = datetime.datetime(end_day.year, end_day.month, end_day.day, 23, 59, 59).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        events = self.dcal.get_events(from_iso, to_iso)
+        if not events:
+            return None
+
+        # Helper to parse event start
+        def parse_start(ev: Dict[str, Any]) -> Optional[datetime.datetime]:
+            s = ev.get("start")
+            if not s:
+                return None
+            try:
+                # Handle iso format
+                clean_s = s.replace("Z", "+00:00")
+                dt = datetime.datetime.fromisoformat(clean_s)
+                if ev.get("allDay"):
+                    # Local midnight
+                    return datetime.datetime(dt.year, dt.month, dt.day, 0, 0, 0)
+                if dt.tzinfo:
+                    return dt.astimezone().replace(tzinfo=None)
+                return dt
+            except Exception:
+                return None
+
+        valid_events = []
+        for ev in events:
+            st = parse_start(ev)
+            if not st:
+                continue
+            # Check if event is still relevant (ends after now or starts after now)
+            valid_events.append((st, ev))
+
+        valid_events.sort(key=lambda x: x[0])
+        now_clean = now.replace(microsecond=0)
+
+        for st, ev in valid_events:
+            if st >= now_clean:
+                return {
+                    "summary": ev.get("summary") or "",
+                    "start": ev.get("start") or "",
+                    "end": ev.get("end") or "",
+                    "allDay": bool(ev.get("allDay", False)),
+                    "location": ev.get("location") or "",
+                    "description": ev.get("description") or "",
+                    "meetingUrl": ev.get("meetingUrl") or "",
+                    "url": ev.get("url") or ""
+                }
+            # Or currently happening
+            if now_window_mins > 0 and (now_clean - st).total_seconds() <= (now_window_mins * 60):
+                return {
+                    "summary": ev.get("summary") or "",
+                    "start": ev.get("start") or "",
+                    "end": ev.get("end") or "",
+                    "allDay": bool(ev.get("allDay", False)),
+                    "location": ev.get("location") or "",
+                    "description": ev.get("description") or "",
+                    "meetingUrl": ev.get("meetingUrl") or "",
+                    "url": ev.get("url") or ""
+                }
+
+        return None

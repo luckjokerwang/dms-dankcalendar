@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""
+dms-calendar-core
+Unified, high-performance CLI backend for Dank Calendar Plus.
+"""
+
+import sys
+import os
+import json
+import argparse
+import time
+
+# Ensure core package is importable
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from lib.types import StandardResponse
+from lib.agenda_service import AgendaService
+from lib.task_service import TaskService
+from lib.provider_service import ProviderService, PRESET_PROVIDERS
+from lib.session_service import SessionService
+from lib.ai_service import AiService
+from lib.paste_service import PasteService
+
+def make_ok(data=None, code=200):
+    return {
+        "status": "ok",
+        "code": code,
+        "data": data,
+        "timestamp": int(time.time())
+    }
+
+def make_err(message="Error", code=500, details=None):
+    return {
+        "status": "error",
+        "code": code,
+        "error": {
+            "code": "CORE_ERROR",
+            "message": message,
+            "details": details
+        },
+        "timestamp": int(time.time())
+    }
+
+def handle_agenda(args):
+    service = AgendaService()
+    if args.action == "get":
+        events = service.get_agenda_events(past_days=args.past, future_days=args.future)
+        print(json.dumps(events, ensure_ascii=False))
+    elif args.action == "next":
+        next_ev = service.get_next_event(look_ahead_days=args.lookahead, now_window_mins=args.now_window)
+        print(json.dumps(next_ev or {}, ensure_ascii=False))
+
+def handle_tasks(args):
+    service = TaskService()
+    if args.action == "list":
+        res = service.get_tasks_summary()
+        print(json.dumps(res, ensure_ascii=False))
+    elif args.action == "create":
+        ok = service.dcal.create_task(args.calendar_id, args.summary, args.priority, args.due)
+        print(json.dumps(make_ok({"created": ok}) if ok else make_err("Failed to create task")))
+    elif args.action == "complete":
+        ok = service.dcal.complete_task(args.id, args.completed)
+        print(json.dumps(make_ok({"completed": ok}) if ok else make_err("Failed to complete task")))
+    elif args.action == "delete":
+        ok = service.dcal.delete_task(args.id)
+        print(json.dumps(make_ok({"deleted": ok}) if ok else make_err("Failed to delete task")))
+    elif args.action == "batch-create":
+        try:
+            payload = json.loads(args.payload)
+            res = service.batch_create(payload)
+            print(json.dumps(make_ok(res) if res.get("success") else make_err("Batch create failed", details=str(res.get("errors")))))
+        except Exception as e:
+            print(json.dumps(make_err(f"Invalid batch payload: {e}")))
+
+def handle_provider(args):
+    if args.action == "list":
+        cfg = ProviderService.load_config()
+        print(json.dumps(make_ok(cfg), ensure_ascii=False))
+    elif args.action == "get-presets":
+        print(json.dumps(make_ok({"presets": PRESET_PROVIDERS}), ensure_ascii=False))
+    elif args.action == "save":
+        try:
+            prov = json.loads(args.payload)
+            ok = ProviderService.save_provider(prov)
+            print(json.dumps(make_ok({"saved": ok}) if ok else make_err("Failed to save provider")))
+        except Exception as e:
+            print(json.dumps(make_err(f"Invalid provider payload: {e}")))
+    elif args.action == "delete":
+        ok = ProviderService.delete_provider(args.id)
+        print(json.dumps(make_ok({"deleted": ok}) if ok else make_err("Failed to delete provider")))
+    elif args.action == "set-active":
+        ok = ProviderService.set_active(provider_id=args.provider, model_id=args.model)
+        print(json.dumps(make_ok({"updated": ok}) if ok else make_err("Failed to set active")))
+    elif args.action == "fetch-models":
+        res = ProviderService.fetch_models(args.id, custom_base_url=args.base_url, custom_api_key=args.api_key)
+        print(json.dumps(res, ensure_ascii=False))
+
+def handle_session(args):
+    if args.action == "list":
+        sessions = SessionService.list_sessions()
+        print(json.dumps(make_ok({"sessions": sessions}), ensure_ascii=False))
+    elif args.action == "get":
+        sess = SessionService.get_session(args.id)
+        print(json.dumps(make_ok(sess) if sess else make_err("Session not found", code=404), ensure_ascii=False))
+    elif args.action == "save":
+        try:
+            sess = json.loads(args.payload)
+            ok = SessionService.save_session(sess)
+            print(json.dumps(make_ok({"saved": ok}) if ok else make_err("Failed to save session")))
+        except Exception as e:
+            print(json.dumps(make_err(f"Invalid session payload: {e}")))
+    elif args.action == "delete":
+        ok = SessionService.delete_session(args.id)
+        print(json.dumps(make_ok({"deleted": ok}) if ok else make_err("Failed to delete session")))
+    elif args.action == "smart-title":
+        try:
+            p_data = json.loads(args.payload) if args.payload else {}
+            title = SessionService.generate_smart_title(
+                session_id=p_data.get("sessionId", ""),
+                prompt=p_data.get("prompt", ""),
+                proposal=p_data.get("proposal"),
+                messages=p_data.get("messages", [])
+            )
+            print(json.dumps(make_ok({"title": title}), ensure_ascii=False))
+        except Exception as e:
+            print(json.dumps(make_err(f"Smart title failed: {e}")))
+
+def handle_ai(args):
+    if args.action == "stream":
+        try:
+            msgs = json.loads(args.messages) if args.messages else []
+            AiService.stream_chat(
+                messages=msgs,
+                model_override=args.model,
+                custom_system_prompt=args.system_prompt
+            )
+        except Exception as e:
+            print(json.dumps({"type": "error", "message": str(e)}))
+
+def handle_paste(args):
+    path = PasteService.capture_clipboard_image()
+    if path:
+        print(path)
+    else:
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="Dank Calendar Plus Core CLI")
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+
+    # Agenda subparser
+    p_agenda = subparsers.add_parser("agenda")
+    p_agenda.add_argument("action", choices=["get", "next"])
+    p_agenda.add_argument("--past", type=int, default=7)
+    p_agenda.add_argument("--future", type=int, default=30)
+    p_agenda.add_argument("--lookahead", type=int, default=1)
+    p_agenda.add_argument("--now-window", type=int, default=5)
+    p_agenda.set_defaults(func=handle_agenda)
+
+    # Tasks subparser
+    p_tasks = subparsers.add_parser("tasks")
+    p_tasks.add_argument("action", choices=["list", "create", "complete", "delete", "batch-create"])
+    p_tasks.add_argument("--calendar-id", default="")
+    p_tasks.add_argument("--summary", default="")
+    p_tasks.add_argument("--priority", type=int, default=0)
+    p_tasks.add_argument("--due", default=None)
+    p_tasks.add_argument("--id", default="")
+    p_tasks.add_argument("--completed", type=lambda v: v.lower() == "true", default=True)
+    p_tasks.add_argument("--payload", default="")
+    p_tasks.set_defaults(func=handle_tasks)
+
+    # Provider subparser
+    p_provider = subparsers.add_parser("provider")
+    p_provider.add_argument("action", choices=["list", "get-presets", "save", "delete", "set-active", "fetch-models"])
+    p_provider.add_argument("--id", default="")
+    p_provider.add_argument("--base-url", default=None)
+    p_provider.add_argument("--api-key", default=None)
+    p_provider.add_argument("--provider", default=None)
+    p_provider.add_argument("--model", default=None)
+    p_provider.add_argument("--payload", default="")
+    p_provider.set_defaults(func=handle_provider)
+
+    # Session subparser
+    p_session = subparsers.add_parser("session")
+    p_session.add_argument("action", choices=["list", "get", "save", "delete", "smart-title"])
+    p_session.add_argument("--id", default="")
+    p_session.add_argument("--payload", default="")
+    p_session.set_defaults(func=handle_session)
+
+    # AI subparser
+    p_ai = subparsers.add_parser("ai")
+    p_ai.add_argument("action", choices=["stream"])
+    p_ai.add_argument("--messages", default="[]")
+    p_ai.add_argument("--model", default=None)
+    p_ai.add_argument("--system-prompt", default=None)
+    p_ai.set_defaults(func=handle_ai)
+
+    # Paste subparser
+    p_paste = subparsers.add_parser("paste")
+    p_paste.set_defaults(func=handle_paste)
+
+    args = parser.parse_args()
+    args.func(args)
+
+if __name__ == "__main__":
+    main()

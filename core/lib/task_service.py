@@ -1,0 +1,95 @@
+"""
+task_service.py
+Service for task queries, priority ranking, and operations.
+"""
+
+from typing import Dict, Any, List, Optional
+from .dcal_client import DcalClient
+from .types import TasksListResult, TaskItem
+
+class TaskService:
+    def __init__(self, dcal: Optional[DcalClient] = None):
+        self.dcal = dcal or DcalClient()
+
+    def get_tasks_summary(self) -> TasksListResult:
+        cals = self.dcal.get_calendars()
+        task_cals = [c for c in cals if c.get("holdsTasks")]
+        cal_map = {c["id"]: c.get("name") or c.get("accountName") or "Tasks" for c in task_cals}
+        default_cal_id = task_cals[0]["id"] if task_cals else ""
+
+        all_tasks = self.dcal.get_tasks()
+        pending: List[TaskItem] = []
+        completed: List[TaskItem] = []
+
+        for t in all_tasks:
+            t["calendarName"] = cal_map.get(t.get("calendarId", ""), "Tasks")
+            if t.get("status") == "completed" or bool(t.get("completed")):
+                completed.append(t)  # type: ignore
+            else:
+                pending.append(t)  # type: ignore
+
+        def task_sort_key(idx_and_task):
+            idx, t = idx_and_task
+            p = t.get("priority") or 0
+            p_rank = p if (1 <= p <= 9) else 10
+            due = t.get("due") or "9999-99-99"
+            return (p_rank, due, idx)
+
+        indexed = list(enumerate(pending))
+        indexed.sort(key=task_sort_key)
+        sorted_pending = [t for _, t in indexed]
+
+        return {
+            "pending": sorted_pending,
+            "completed": completed,
+            "pendingCount": len(sorted_pending),
+            "completedCount": len(completed),
+            "defaultCalendarId": default_cal_id,
+            "taskCalendars": [{"id": c["id"], "name": c.get("name") or "Tasks"} for c in task_cals]
+        }
+
+    def batch_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        cals = self.dcal.get_calendars()
+        event_cals = [c for c in cals if c.get("holdsEvents", True) and not c.get("holdsTasks")]
+        task_cals = [c for c in cals if c.get("holdsTasks")]
+        default_event_cal_id = event_cals[0]["id"] if event_cals else (cals[0]["id"] if cals else "")
+        default_task_cal_id = task_cals[0]["id"] if task_cals else (cals[0]["id"] if cals else "")
+
+        created_events = 0
+        created_tasks = 0
+        errors = []
+
+        for ev in payload.get("events", []):
+            summary = (ev.get("title") or ev.get("summary") or "").strip()
+            start = ev.get("start")
+            end = ev.get("end") or start
+            if not summary or not start:
+                continue
+            all_day = bool(ev.get("allDay", False))
+            loc = ev.get("location", "")
+            cal_id = ev.get("calendarId") or default_event_cal_id
+            ok = self.dcal.create_event(cal_id, summary, start, end, all_day, loc)
+            if ok:
+                created_events += 1
+            else:
+                errors.append(f"Failed to create event: {summary}")
+
+        for t in payload.get("tasks", []):
+            summary = (t.get("summary") or t.get("title") or "").strip()
+            if not summary:
+                continue
+            cal_id = t.get("calendarId") or default_task_cal_id
+            p = int(t.get("priority", 0))
+            due = t.get("due")
+            ok = self.dcal.create_task(cal_id, summary, p, due)
+            if ok:
+                created_tasks += 1
+            else:
+                errors.append(f"Failed to create task: {summary}")
+
+        return {
+            "createdEvents": created_events,
+            "createdTasks": created_tasks,
+            "errors": errors,
+            "success": len(errors) == 0
+        }

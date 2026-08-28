@@ -78,3 +78,26 @@ echo "$res" | grep -q '"status": "ok"' || { echo "batch-create-items failed: $re
 echo "batch-create-items tests: ok"
 
 echo "All backend service tests passed successfully!"
+
+echo "=== 5. Testing unified core CLI (core/dms-calendar-core) ==="
+# Test provider list & presets
+"$repo_dir/core/dms-calendar-core" provider list > "$test_tmp/core_prov.json"
+grep -q '"status": "ok"' "$test_tmp/core_prov.json" || { echo "Core provider list failed"; exit 1; }
+
+"$repo_dir/core/dms-calendar-core" provider get-presets > "$test_tmp/core_presets.json"
+grep -q "DeepSeek" "$test_tmp/core_presets.json" || { echo "Core get-presets failed"; exit 1; }
+
+# Test session CRUD via core
+"$repo_dir/core/dms-calendar-core" session save --payload '{"id":"core-sess-1","title":"Core测试","messages":[{"role":"user","content":"你好"}]}' > "$test_tmp/core_save.json"
+grep -q '"status": "ok"' "$test_tmp/core_save.json" || { echo "Core session save failed"; exit 1; }
+
+"$repo_dir/core/dms-calendar-core" session get --id "core-sess-1" > "$test_tmp/core_get.json"
+grep -q "Core测试" "$test_tmp/core_get.json" || { echo "Core session get failed"; exit 1; }
+
+"$repo_dir/core/dms-calendar-core" session delete --id "core-sess-1" > /dev/null
+
+# Test tasks batch-create with fake dcal
+res_core=$(PATH="$fake_bin:$PATH" "$repo_dir/core/dms-calendar-core" tasks batch-create --payload "$payload")
+echo "$res_core" | grep -q '"status": "ok"' || { echo "Core batch-create failed: $res_core"; exit 1; }
+
+echo "Unified core CLI tests: ok"
