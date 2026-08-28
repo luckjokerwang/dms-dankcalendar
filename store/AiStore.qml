@@ -72,6 +72,15 @@ Item {
             if (store.isGenerating) {
                 store.isGenerating = false;
                 store.streamingAssistantText = "";
+                var msgs = store.messages.slice();
+                msgs.push({
+                    role: "system",
+                    content: "⚠️ 连接已中断 (退出码: " + code + ")，请检查服务商 API 端点或密匙配置",
+                    timestamp: new Date().toISOString()
+                });
+                store.messages = msgs;
+                store.saveCurrentSession();
+                store.generationFinished();
             }
         }
     }

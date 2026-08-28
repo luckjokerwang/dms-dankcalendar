@@ -765,6 +765,13 @@ PluginSettings {
     }
 
     ToggleSetting {
+        settingKey: "scrollTitle"
+        label: "超长标题跑马灯滚动"
+        description: "当日程标题超出顶栏宽度时平滑来回滚动展示，关闭则直接截断显示省略号"
+        defaultValue: true
+    }
+
+    ToggleSetting {
         settingKey: "showTooltip"
         label: "鼠标悬停提示"
         description: "鼠标悬停在顶栏胶囊上时，浮现完整的日程详情与倒计时提示框"

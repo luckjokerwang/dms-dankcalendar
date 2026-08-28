@@ -23,7 +23,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "smart_toy",
         "color": "#1565c0",
         "desc": "官方深度推理与排程模型",
-        "models": []
+        "models": [
+            {"id": "deepseek-chat", "name": "DeepSeek-V3", "desc": "通用大模型"},
+            {"id": "deepseek-reasoner", "name": "DeepSeek-R1", "desc": "深度推理大模型"}
+        ]
     },
     {
         "id": "siliconflow",
@@ -32,7 +35,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "auto_awesome",
         "color": "#7c3aed",
         "desc": "海量开源大模型高速中继",
-        "models": []
+        "models": [
+            {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3", "desc": "高速中继"},
+            {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek R1", "desc": "深度思考中继"}
+        ]
     },
     {
         "id": "sensenova",
@@ -41,7 +47,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "cloud",
         "color": "#0ea5e9",
         "desc": "商汤日日新官方大模型端点",
-        "models": []
+        "models": [
+            {"id": "SenseChat-5", "name": "SenseChat 5.0", "desc": "旗舰模型"},
+            {"id": "SenseChat-5-Cantonese", "name": "SenseChat 5.0 粤语版", "desc": "多语言方言"}
+        ]
     },
     {
         "id": "qwen",
@@ -50,7 +59,11 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "cloud",
         "color": "#ff6a00",
         "desc": "阿里云通义千问官方兼容端点",
-        "models": []
+        "models": [
+            {"id": "qwen-plus", "name": "通义千问 Plus", "desc": "主力模型"},
+            {"id": "qwen-turbo", "name": "通义千问 Turbo", "desc": "极速推理"},
+            {"id": "qwen-max", "name": "通义千问 Max", "desc": "深度规划"}
+        ]
     },
     {
         "id": "openai",
@@ -59,7 +72,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "psychology",
         "color": "#10a37f",
         "desc": "GPT-4o / o1 / o3 官方接口",
-        "models": []
+        "models": [
+            {"id": "gpt-4o", "name": "GPT-4o", "desc": "全能多模态"},
+            {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "desc": "极速轻量"}
+        ]
     },
     {
         "id": "claude",
@@ -68,7 +84,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "auto_awesome",
         "color": "#d97706",
         "desc": "Claude 3.7 Sonnet 官方与代理接口",
-        "models": []
+        "models": [
+            {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "desc": "混合推理"},
+            {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "desc": "极速响应"}
+        ]
     },
     {
         "id": "gemini",
@@ -77,7 +96,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "bolt",
         "color": "#4285f4",
         "desc": "Gemini 2.0 Flash / Pro 官方接口",
-        "models": []
+        "models": [
+            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "desc": "新一代多模态"},
+            {"id": "gemini-2.0-pro-exp-02-05", "name": "Gemini 2.0 Pro", "desc": "高级规划推理"}
+        ]
     },
     {
         "id": "ollama",
@@ -86,7 +108,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "terminal",
         "color": "#212121",
         "desc": "本地离线私有化模型服务",
-        "models": []
+        "models": [
+            {"id": "deepseek-r1:latest", "name": "DeepSeek-R1 (Local)", "desc": "本地离线推理"},
+            {"id": "qwen2.5:latest", "name": "Qwen 2.5 (Local)", "desc": "本地通用"}
+        ]
     },
     {
         "id": "openrouter",
@@ -104,7 +129,10 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "icon": "flash_on",
         "color": "#e65100",
         "desc": "Agnes 高速排程专用中继",
-        "models": []
+        "models": [
+            {"id": "agnes-2.5-flash", "name": "Agnes 2.5 Flash", "desc": "高速排程 (推荐)"},
+            {"id": "agnes-2.5-pro", "name": "Agnes 2.5 Pro", "desc": "复杂深度规划"}
+        ]
     },
     {
         "id": "custom",

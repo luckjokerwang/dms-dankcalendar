@@ -223,12 +223,10 @@ Item {
                         width: parent.width
                         implicitHeight: Math.max(48, rowContent.implicitHeight + Theme.spacingS * 2)
                         radius: Theme.cornerRadiusSmall
-                        color: rowHover.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                        color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
 
-                        MouseArea {
+                        HoverHandler {
                             id: rowHover
-                            anchors.fill: parent
-                            hoverEnabled: true
                         }
 
                         Row {
@@ -419,13 +417,11 @@ Item {
                             width: parent.width
                             implicitHeight: Math.max(40, compContent.implicitHeight + Theme.spacingXS * 2)
                             radius: Theme.cornerRadiusSmall
-                            color: compRowHover.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                            color: compRowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
                             opacity: 0.7
 
-                            MouseArea {
+                            HoverHandler {
                                 id: compRowHover
-                                anchors.fill: parent
-                                hoverEnabled: true
                             }
 
                             Row {
@@ -476,7 +472,7 @@ Item {
 
                                 // Delete Completed Task (Visible on Hover)
                                 Rectangle {
-                                    visible: compRowHover.containsMouse || delCompMouse.containsMouse
+                                    visible: compRowHover.hovered || delCompMouse.containsMouse
                                     width: 24
                                     height: 24
                                     radius: 12
