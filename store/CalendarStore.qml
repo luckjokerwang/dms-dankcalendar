@@ -6,7 +6,7 @@ import qs.Common
 Item {
     id: store
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
 
     // Configurable properties
     property int refreshInterval: constants.defaultRefreshInterval
@@ -78,7 +78,7 @@ Item {
 
     Process {
         id: fetchNextProc
-        command: [store.constants.coreScriptPath, "agenda", "next", "--lookahead", String(store.lookAheadDays), "--now-window", String(store.nowWindowMinutes)]
+        command: [constants.coreScriptPath, "agenda", "next", "--lookahead", String(store.lookAheadDays), "--now-window", String(store.nowWindowMinutes)]
         running: false
         stdout: SplitParser {
             onRead: (line) => {
@@ -105,7 +105,7 @@ Item {
 
     Process {
         id: fetchAgendaProc
-        command: [store.constants.coreScriptPath, "agenda", "get", "--past", String(store.agendaPastDays), "--future", String(store.agendaFutureDays)]
+        command: [constants.coreScriptPath, "agenda", "get", "--past", String(store.agendaPastDays), "--future", String(store.agendaFutureDays)]
         running: false
         stdout: SplitParser {
             onRead: (line) => {

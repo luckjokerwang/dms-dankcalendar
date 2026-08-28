@@ -100,135 +100,131 @@ PluginComponent {
 
     // Popout Content Area
     popoutContent: Component {
-        Item {
+        PopoutComponent {
             id: popout
+            width: root.popoutWidth
+            spacing: Theme.spacingM
 
-            Column {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingM
-                spacing: Theme.spacingM
+            // 1. Popout Top Header
+            PopoutHeader {
+                calendarStore: calendarStore
+                taskStore: taskStore
+                activeModule: root.activeModule
+                isRefreshing: calendarStore.isLoading
+                onNewEventRequested: {
+                    root.newEvent();
+                    if (popout.closePopout) popout.closePopout();
+                }
+                onRefreshRequested: root.refreshAll()
+                onSettingsRequested: {
+                    Quickshell.execDetached(["dms", "settings", "dankCalendarPlus"]);
+                    if (popout.closePopout) popout.closePopout();
+                }
+                onCloseRequested: {
+                    if (popout.closePopout) popout.closePopout();
+                }
+                onToggleDcalRequested: {
+                    root.toggleDcal();
+                    if (popout.closePopout) popout.closePopout();
+                }
+            }
 
-                // 1. Popout Top Header
-                PopoutHeader {
-                    calendarStore: calendarStore
-                    taskStore: taskStore
-                    activeModule: root.activeModule
-                    isRefreshing: calendarStore.isLoading
-                    onNewEventRequested: {
-                        root.newEvent();
-                        if (popout.closePopout) popout.closePopout();
-                    }
-                    onRefreshRequested: root.refreshAll()
-                    onSettingsRequested: {
-                        Quickshell.execDetached(["dms", "settings", "dankCalendarPlus"]);
-                        if (popout.closePopout) popout.closePopout();
-                    }
-                    onCloseRequested: {
-                        if (popout.closePopout) popout.closePopout();
-                    }
-                    onToggleDcalRequested: {
-                        root.toggleDcal();
-                        if (popout.closePopout) popout.closePopout();
+            // 2. Tab Switcher
+            PopoutTabBar {
+                activeModule: root.activeModule
+                pendingTasksCount: taskStore.pendingTasksCount
+                onTabSelected: (mod) => {
+                    globalActiveModule.set(mod);
+                    if (mod === "agenda" || mod === "tasks") {
+                        globalBarModule.set(mod);
                     }
                 }
+            }
 
-                // 2. Tab Switcher
-                PopoutTabBar {
-                    activeModule: root.activeModule
-                    pendingTasksCount: taskStore.pendingTasksCount
-                    onTabSelected: (mod) => {
-                        globalActiveModule.set(mod);
-                        if (mod === "agenda" || mod === "tasks") {
-                            globalBarModule.set(mod);
+            // 3. Error Banner (if any)
+            Rectangle {
+                visible: calendarStore.hasSyncError
+                width: parent.width - Theme.spacingS * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: 32
+                radius: Theme.cornerRadiusSmall
+                color: Theme.withAlpha(Theme.error, 0.15)
+                border.width: 1
+                border.color: Theme.withAlpha(Theme.error, 0.4)
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingS
+                    anchors.rightMargin: Theme.spacingS
+                    spacing: Theme.spacingS
+
+                    DankIcon {
+                        name: "error_outline"
+                        size: 16
+                        color: Theme.error
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        width: parent.width - 60
+                        text: calendarStore.syncErrorMessage || "同步失败"
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        color: Theme.error
+                        elide: Text.ElideRight
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        text: "重试"
+                        font.pixelSize: Theme.fontSizeSmall - 1
+                        font.weight: Font.Bold
+                        color: Theme.error
+                        anchors.verticalCenter: parent.verticalCenter
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.refreshAll()
                         }
                     }
                 }
+            }
 
-                // 3. Error Banner (if any)
-                Rectangle {
-                    visible: calendarStore.hasSyncError
-                    width: parent.width - Theme.spacingS * 2
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    height: 32
-                    radius: Theme.cornerRadiusSmall
-                    color: Theme.withAlpha(Theme.error, 0.15)
-                    border.width: 1
-                    border.color: Theme.withAlpha(Theme.error, 0.4)
-
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.spacingS
-                        anchors.rightMargin: Theme.spacingS
-                        spacing: Theme.spacingS
-
-                        DankIcon {
-                            name: "error_outline"
-                            size: 16
-                            color: Theme.error
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        StyledText {
-                            width: parent.width - 60
-                            text: calendarStore.syncErrorMessage || "同步失败"
-                            font.pixelSize: Theme.fontSizeSmall - 1
-                            color: Theme.error
-                            elide: Text.ElideRight
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        StyledText {
-                            text: "重试"
-                            font.pixelSize: Theme.fontSizeSmall - 1
-                            font.weight: Font.Bold
-                            color: Theme.error
-                            anchors.verticalCenter: parent.verticalCenter
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.refreshAll()
-                            }
-                        }
-                    }
+            // 4. View Module Containers
+            AgendaView {
+                id: agendaViewItem
+                visible: root.activeModule === "agenda"
+                calendarStore: calendarStore
+                width: parent.width
+                height: constants.defaultContentHeight
+                onCloseRequested: {
+                    if (popout.closePopout) popout.closePopout();
                 }
-
-                // 4. View Module Containers
-                AgendaView {
-                    id: agendaViewItem
-                    visible: root.activeModule === "agenda"
-                    calendarStore: calendarStore
-                    width: parent.width
-                    height: constants.defaultContentHeight
-                    onCloseRequested: {
-                        if (popout.closePopout) popout.closePopout();
-                    }
-                    Connections {
-                        target: popout.parentPopout
-                        function onOpened() { agendaViewItem.resetToToday(); }
-                    }
+                Connections {
+                    target: popout.parentPopout
+                    function onOpened() { agendaViewItem.resetToToday(); }
                 }
+            }
 
-                TasksView {
-                    id: tasksViewItem
-                    visible: root.activeModule === "tasks"
-                    taskStore: taskStore
-                    width: parent.width
-                    height: constants.defaultContentHeight
-                    onCloseRequested: {
-                        if (popout.closePopout) popout.closePopout();
-                    }
+            TasksView {
+                id: tasksViewItem
+                visible: root.activeModule === "tasks"
+                taskStore: taskStore
+                width: parent.width
+                height: constants.defaultContentHeight
+                onCloseRequested: {
+                    if (popout.closePopout) popout.closePopout();
                 }
+            }
 
-                ChatView {
-                    id: chatViewItem
-                    visible: root.activeModule === "ai"
-                    aiStore: aiStore
-                    providerStore: providerStore
-                    batchScriptPath: constants.coreScriptPath
-                    width: parent.width
-                    height: constants.defaultContentHeight
-                    onScheduleConfirmed: root.refreshAll()
-                }
+            ChatView {
+                id: chatViewItem
+                visible: root.activeModule === "ai"
+                aiStore: aiStore
+                providerStore: providerStore
+                batchScriptPath: constants.coreScriptPath
+                width: parent.width
+                height: constants.defaultContentHeight
+                onScheduleConfirmed: root.refreshAll()
             }
         }
     }

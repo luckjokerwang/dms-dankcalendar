@@ -6,7 +6,7 @@ import qs.Common
 Item {
     id: store
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
 
     // Session State
     property string currentSessionId: ""
@@ -79,7 +79,7 @@ Item {
     // 2. Session List Process
     Process {
         id: sessionsListProc
-        command: [store.constants.coreScriptPath, "session", "list"]
+        command: [constants.coreScriptPath, "session", "list"]
         running: false
         stdout: SplitParser {
             onRead: (line) => {
@@ -134,7 +134,6 @@ Item {
                         if (store.currentProposal) {
                             var p = Object.assign({}, store.currentProposal, { confirmed: true });
                             store.currentProposal = p;
-                            // Update last assistant message proposal state
                             var msgs = store.messages.slice();
                             for (var i = msgs.length - 1; i >= 0; i--) {
                                 if (msgs[i].proposal) {
@@ -169,13 +168,13 @@ Item {
     function switchSession(sessionId) {
         if (!sessionId) return;
         if (store.isGenerating) store.stopGeneration();
-        sessionGetProc.command = [store.constants.coreScriptPath, "session", "get", "--id", sessionId];
+        sessionGetProc.command = [constants.coreScriptPath, "session", "get", "--id", sessionId];
         sessionGetProc.running = true;
     }
 
     function deleteSession(sessionId) {
         if (!sessionId) return;
-        Quickshell.execDetached([store.constants.coreScriptPath, "session", "delete", "--id", sessionId]);
+        Quickshell.execDetached([constants.coreScriptPath, "session", "delete", "--id", sessionId]);
         if (store.currentSessionId === sessionId) {
             store.newSession();
         }
@@ -191,7 +190,7 @@ Item {
             proposal: currentProposal,
             updatedAt: new Date().toISOString()
         };
-        Quickshell.execDetached([store.constants.coreScriptPath, "session", "save", "--payload", JSON.stringify(sessObj)]);
+        Quickshell.execDetached([constants.coreScriptPath, "session", "save", "--payload", JSON.stringify(sessObj)]);
         store.loadSessions();
     }
 
@@ -213,7 +212,6 @@ Item {
         streamingAssistantText = "";
         isGenerating = true;
 
-        // Smart Title extraction on first message
         if (messages.length === 1 || currentSessionTitle === "新排程会话") {
             var smartTitlePayload = JSON.stringify({
                 sessionId: currentSessionId,
@@ -222,7 +220,7 @@ Item {
                 messages: messages
             });
             var smartTitleProc = Qt.createQmlObject('import Quickshell.Io; Process {}', store);
-            smartTitleProc.command = [store.constants.coreScriptPath, "session", "smart-title", "--payload", smartTitlePayload];
+            smartTitleProc.command = [constants.coreScriptPath, "session", "smart-title", "--payload", smartTitlePayload];
             smartTitleProc.stdout = Qt.createQmlObject('import Quickshell.Io; SplitParser {}', store);
             smartTitleProc.stdout.onRead = function(line) {
                 try {
@@ -235,7 +233,7 @@ Item {
             smartTitleProc.running = true;
         }
 
-        var cmd = [store.constants.coreScriptPath, "ai", "stream", "--messages", JSON.stringify(messages)];
+        var cmd = [constants.coreScriptPath, "ai", "stream", "--messages", JSON.stringify(messages)];
         if (modelId) cmd.push("--model", modelId);
         if (systemPrompt) cmd.push("--system-prompt", systemPrompt);
 
@@ -263,7 +261,7 @@ Item {
 
     function confirmProposal(proposalObj) {
         if (!proposalObj) return;
-        batchProc.command = [store.constants.coreScriptPath, "tasks", "batch-create", "--payload", JSON.stringify(proposalObj)];
+        batchProc.command = [constants.coreScriptPath, "tasks", "batch-create", "--payload", JSON.stringify(proposalObj)];
         batchProc.running = true;
     }
 

@@ -10,7 +10,7 @@ import "../../store"
 Rectangle {
     id: inputBar
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
     property bool isGenerating: false
     property string attachedImagePath: ""
     property string attachedFilePath: ""
@@ -29,7 +29,7 @@ Rectangle {
 
     Process {
         id: pasteProc
-        command: [inputBar.constants.coreScriptPath, "paste"]
+        command: [constants.coreScriptPath, "paste"]
         running: false
         stdout: SplitParser {
             onRead: (line) => {

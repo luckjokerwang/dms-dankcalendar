@@ -6,7 +6,7 @@ import qs.Common
 Item {
     id: store
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
 
     // State
     property var pendingTasks: []
@@ -23,7 +23,7 @@ Item {
 
     Process {
         id: fetchTasksProc
-        command: [store.constants.coreScriptPath, "tasks", "list"]
+        command: [constants.coreScriptPath, "tasks", "list"]
         running: false
         stdout: SplitParser {
             onRead: (line) => {
@@ -54,7 +54,6 @@ Item {
         onExited: (code) => {
             if (code !== 0) {
                 console.warn("[TaskStore] Task action failed with exit code:", code);
-                // Trigger full sync to recover state
                 store.fetchTasks();
             }
             store.isActionRunning = false;

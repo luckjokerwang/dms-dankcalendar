@@ -6,7 +6,7 @@ import qs.Common
 Item {
     id: store
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
 
     property var allProviders: []
     property var presetList: []
@@ -43,7 +43,7 @@ Item {
 
     Process {
         id: listProc
-        command: [store.constants.coreScriptPath, "provider", "list"]
+        command: [constants.coreScriptPath, "provider", "list"]
         running: false
         stdout: SplitParser {
             onRead: (line) => {
@@ -63,7 +63,7 @@ Item {
 
     Process {
         id: presetsProc
-        command: [store.constants.coreScriptPath, "provider", "get-presets"]
+        command: [constants.coreScriptPath, "provider", "get-presets"]
         running: false
         stdout: SplitParser {
             onRead: (line) => {
@@ -103,19 +103,19 @@ Item {
     }
 
     function saveProvider(providerObj) {
-        saveProc.command = [store.constants.coreScriptPath, "provider", "save", "--payload", JSON.stringify(providerObj)];
+        saveProc.command = [constants.coreScriptPath, "provider", "save", "--payload", JSON.stringify(providerObj)];
         saveProc.running = true;
     }
 
     function deleteProvider(providerId) {
-        deleteProc.command = [store.constants.coreScriptPath, "provider", "delete", "--id", providerId];
+        deleteProc.command = [constants.coreScriptPath, "provider", "delete", "--id", providerId];
         deleteProc.running = true;
     }
 
     function setActive(providerId, modelId) {
         if (providerId) store.activeProviderId = providerId;
         if (modelId) store.activeModelId = modelId;
-        var cmd = [store.constants.coreScriptPath, "provider", "set-active"];
+        var cmd = [constants.coreScriptPath, "provider", "set-active"];
         if (providerId) cmd.push("--provider", providerId);
         if (modelId) cmd.push("--model", modelId);
         Quickshell.execDetached(cmd);

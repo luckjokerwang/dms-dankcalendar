@@ -10,7 +10,7 @@ import "../../store"
 Rectangle {
     id: modal
 
-    property DankCalendarConstants constants: DankCalendarConstants {}
+    DankCalendarConstants { id: constants }
     property ProviderStore providerStore: null
 
     property bool isEditing: false
@@ -34,7 +34,6 @@ Rectangle {
 
     MouseArea {
         anchors.fill: parent
-        // Eat clicks so they don't fall through
     }
 
     Process {
@@ -194,7 +193,7 @@ Rectangle {
                         modal.isTesting = true;
                         modal.testResult = "⏳ 正在连接测试端点...";
                         testModelsProc.command = [
-                            modal.constants.coreScriptPath, "provider", "fetch-models",
+                            constants.coreScriptPath, "provider", "fetch-models",
                             "--id", modal.providerId,
                             "--base-url", modal.providerBaseUrl,
                             "--api-key", modal.providerApiKey
