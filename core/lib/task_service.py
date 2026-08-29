@@ -32,8 +32,12 @@ class TaskService:
             idx, t = idx_and_task
             p = t.get("priority") or 0
             p_rank = p if (1 <= p <= 9) else 10
-            due = t.get("due") or "9999-99-99"
-            return (p_rank, due, idx)
+            due_raw = t.get("due") or ""
+            has_due = 0 if due_raw else 1
+            due_val = due_raw if due_raw else "9999-99-99T99:99:99Z"
+            created = t.get("created") or t.get("createdAt") or t.get("dtstamp") or ""
+            summary = (t.get("summary") or "").strip().lower()
+            return (p_rank, has_due, due_val, created, idx, summary)
 
         indexed = list(enumerate(pending))
         indexed.sort(key=task_sort_key)
