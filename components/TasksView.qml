@@ -53,7 +53,9 @@ Item {
                 leftIconName: "add"
                 leftIconSize: 20
                 placeholderText: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
-                font.pixelSize: Theme.fontSizeSmall
+                font.pixelSize: Theme.fontSizeMedium
+                topPadding: 9
+                bottomPadding: 7
                 rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
 
                 onAccepted: {

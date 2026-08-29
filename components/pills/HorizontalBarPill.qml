@@ -132,9 +132,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             StyledText {
-                text: (taskStore && taskStore.pendingTasksCount > 0) ? (taskStore.pendingTasksCount + " 项待办") : "全部完成"
+                text: (taskStore && taskStore.pendingTasksCount > 0) ? String(taskStore.pendingTasksCount) : "0"
                 font.pixelSize: Theme.fontSizeSmall
-                font.weight: Font.Medium
+                font.weight: Font.Bold
                 color: Theme.surfaceText
                 anchors.verticalCenter: parent.verticalCenter
             }
