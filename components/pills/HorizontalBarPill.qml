@@ -71,6 +71,7 @@ Item {
 
         // Agenda Mode Display
         Row {
+            id: agendaRow
             spacing: Theme.spacingXS
             visible: barModule === "agenda"
             anchors.verticalCenter: parent.verticalCenter
@@ -78,7 +79,13 @@ Item {
             Item {
                 id: summaryClip
                 visible: (pillDisplayMode !== "countdownOnly") || !(calendarStore && calendarStore.hasEvent)
-                width: dynamicWidth ? Math.min(summaryText.implicitWidth, pillMaxWidth) : pillMaxWidth
+                width: {
+                    var rightBadge = (calendarStore && calendarStore.hasEvent && pillDisplayMode === "full")
+                                     ? (dotAgendaText.implicitWidth + timeTextItem.implicitWidth + agendaRow.spacing * 2)
+                                     : (calendarStore && calendarStore.hasEvent && pillDisplayMode === "countdownOnly" ? 0 : 0)
+                    var available = Math.max(30, pillMaxWidth - rightBadge)
+                    return dynamicWidth ? Math.min(summaryText.implicitWidth, available) : available
+                }
                 height: summaryText.implicitHeight
                 clip: true
                 anchors.verticalCenter: parent.verticalCenter
@@ -107,6 +114,7 @@ Item {
             }
 
             StyledText {
+                id: dotAgendaText
                 text: "•"
                 font.pixelSize: Theme.fontSizeSmall
                 font.weight: Font.Medium
@@ -116,6 +124,7 @@ Item {
             }
 
             StyledText {
+                id: timeTextItem
                 text: calendarStore ? calendarStore.timeText : ""
                 font.pixelSize: Theme.fontSizeSmall
                 font.weight: Font.Medium
@@ -127,11 +136,13 @@ Item {
 
         // Tasks Mode Display
         Row {
+            id: tasksRow
             spacing: Theme.spacingXS
             visible: barModule === "tasks"
             anchors.verticalCenter: parent.verticalCenter
 
             StyledText {
+                id: taskCountItem
                 text: (taskStore && taskStore.pendingTasksCount > 0) ? String(taskStore.pendingTasksCount) : "0"
                 font.pixelSize: Theme.fontSizeSmall
                 font.weight: Font.Bold
@@ -142,7 +153,11 @@ Item {
             Item {
                 id: taskSummaryClip
                 visible: taskStore && taskStore.pendingTasksCount > 0
-                width: dynamicWidth ? Math.min(taskSummaryText.implicitWidth, pillMaxWidth) : pillMaxWidth
+                width: {
+                    var leftBadge = taskCountItem.implicitWidth + tasksRow.spacing
+                    var available = Math.max(30, pillMaxWidth - leftBadge)
+                    return dynamicWidth ? Math.min(taskSummaryText.implicitWidth, available) : available
+                }
                 height: taskSummaryText.implicitHeight
                 clip: true
                 anchors.verticalCenter: parent.verticalCenter
