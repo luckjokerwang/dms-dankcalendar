@@ -82,9 +82,20 @@ PluginComponent {
         globalActiveModule.set(next);
     }
 
+    Timer {
+        id: autoRefreshTimer
+        interval: 350
+        repeat: false
+        onTriggered: {
+            calendarStoreItem.refreshAll();
+            taskStoreItem.fetchTasks();
+        }
+    }
+
     function refreshAll() {
         calendarStoreItem.refreshAll();
         taskStoreItem.fetchTasks();
+        autoRefreshTimer.restart();
     }
 
     function toggleDcal() {

@@ -47,6 +47,7 @@ StyledRect {
                             "committedAt": new Date().toISOString()
                         })
                         root.confirmed(updated)
+                        Quickshell.execDetached(["dcal", "ipc", "accounts.refresh"])
                     } else {
                         root.resultMessage = (res.errors && res.errors.length > 0) ? res.errors.join("; ") : (res.message || "写入失败")
                     }
@@ -61,6 +62,7 @@ StyledRect {
                         "committedAt": new Date().toISOString()
                     })
                     root.confirmed(fallbackUpdated)
+                    Quickshell.execDetached(["dcal", "ipc", "accounts.refresh"])
                 }
                 root.isWriting = false
             }

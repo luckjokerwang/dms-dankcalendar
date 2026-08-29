@@ -62,7 +62,7 @@ Item {
 
                     DankIcon {
                         name: "add"
-                        size: 20
+                        size: 18
                         color: taskTextInput.activeFocus ? Theme.primary : Theme.surfaceVariantText
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -76,14 +76,17 @@ Item {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: 1
                             verticalAlignment: Text.AlignVCenter
-                            color: Theme.surfaceText
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.surfaceText
                             selectByMouse: true
 
                             Text {
                                 text: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
                                 color: Theme.outlineButton
+                                font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontSizeSmall
                                 visible: !taskTextInput.text && !taskTextInput.activeFocus
                                 anchors.verticalCenter: parent.verticalCenter
