@@ -105,7 +105,7 @@ Item {
 
         var cleanSummary = summary.trim();
         var priorityVal = 0;
-        var m = cleanSummary.match(/^!(1|2|3|h|m|l|high|med|low)\s+/i);
+        var m = cleanSummary.match(/^!(1|2|3|h|m|l|high|med|low)\s*/i);
         if (m) {
             var tag = m[1].toLowerCase();
             if (tag === "1" || tag === "h" || tag === "high") priorityVal = constants.priorityHigh;
@@ -128,9 +128,10 @@ Item {
         pendingTasks = newPending;
         pendingTasksCount = newPending.length;
 
-        var cmdArgs = ["dcal", "ipc", "tasks.create", "calendarId=" + cid, "summary=" + cleanSummary];
+        var cmdArgs = [constants.coreScriptPath, "tasks", "create", "--calendar-id", cid, "--summary", cleanSummary];
         if (priorityVal > 0) {
-            cmdArgs.push("priority=" + priorityVal);
+            cmdArgs.push("--priority");
+            cmdArgs.push(String(priorityVal));
         }
         queueTaskAction(cmdArgs);
     }

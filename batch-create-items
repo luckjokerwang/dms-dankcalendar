@@ -172,9 +172,24 @@ def main():
         if priority is not None:
             args.append(f"priority={priority}")
 
-        ok, _, err = run_dcal_cmd(args)
+        ok, out, err = run_dcal_cmd(args)
         if ok:
             created_tasks += 1
+            if priority and out:
+                try:
+                    res_obj = json.loads(out)
+                    tid = res_obj.get("id")
+                    if tid:
+                        import sqlite3, os
+                        db_p = os.path.expanduser("~/.local/share/dankcal/dankcal.db")
+                        if os.path.exists(db_p):
+                            conn = sqlite3.connect(db_p)
+                            c = conn.cursor()
+                            c.execute("UPDATE tasks SET priority = ? WHERE id = ?", (priority, tid))
+                            conn.commit()
+                            conn.close()
+                except Exception:
+                    pass
         else:
             errors.append(f"Task '{summary}': {err}")
 

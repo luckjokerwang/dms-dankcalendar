@@ -64,6 +64,19 @@ class DcalClient:
         if due:
             args.append(f"due={due}")
         res = self.call("tasks.create", *args)
+        if res and isinstance(res, dict) and "id" in res and priority > 0:
+            task_id = res["id"]
+            try:
+                import sqlite3, os
+                db_path = os.path.expanduser("~/.local/share/dankcal/dankcal.db")
+                if os.path.exists(db_path):
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE tasks SET priority = ? WHERE id = ?", (priority, task_id))
+                    conn.commit()
+                    conn.close()
+            except Exception:
+                pass
         return res is not None
 
     def complete_task(self, task_id: str, completed: bool = True) -> bool:

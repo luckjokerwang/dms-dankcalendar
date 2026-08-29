@@ -1,11 +1,22 @@
-"""
-task_service.py
-Service for task queries, priority ranking, and operations.
-"""
-
+import os
+import sqlite3
 from typing import Dict, Any, List, Optional
 from .dcal_client import DcalClient
 from .types import TasksListResult, TaskItem
+
+def _get_created_map() -> Dict[str, str]:
+    db_path = os.path.expanduser("~/.local/share/dankcal/dankcal.db")
+    if not os.path.exists(db_path):
+        return {}
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, created FROM tasks")
+        created_map = {row[0]: str(row[1]) for row in cursor.fetchall() if row[0] and row[1]}
+        conn.close()
+        return created_map
+    except Exception:
+        return {}
 
 class TaskService:
     def __init__(self, dcal: Optional[DcalClient] = None):
@@ -18,11 +29,14 @@ class TaskService:
         default_cal_id = task_cals[0]["id"] if task_cals else ""
 
         all_tasks = self.dcal.get_tasks()
+        created_map = _get_created_map()
         pending: List[TaskItem] = []
         completed: List[TaskItem] = []
 
         for t in all_tasks:
             t["calendarName"] = cal_map.get(t.get("calendarId", ""), "Tasks")
+            if t.get("id") and t.get("id") in created_map:
+                t["created"] = created_map[t["id"]]
             if t.get("status") == "completed" or bool(t.get("completed")):
                 completed.append(t)  # type: ignore
             else:
