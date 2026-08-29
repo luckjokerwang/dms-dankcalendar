@@ -45,89 +45,52 @@ Item {
             width: tasksFlick.width
             spacing: Theme.spacingM
 
-            // 1. Quick Add Task Input Box
-            Rectangle {
+            // 1. Quick Add Task Input Box using DMS standard DankTextField
+            DankTextField {
+                id: taskTextInput
                 width: parent.width
                 height: 42
-                radius: Theme.cornerRadius
-                color: Theme.surfaceContainerHigh
-                border.width: taskTextInput.activeFocus ? 2 : 1
-                border.color: taskTextInput.activeFocus ? Theme.primary : Theme.outlineMedium
+                leftIconName: "add"
+                leftIconSize: 20
+                placeholderText: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
+                font.pixelSize: Theme.fontSizeSmall
+                rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingM
+                onAccepted: {
+                    if (text.trim()) {
+                        if (activeStore)
+                            activeStore.createTask(text.trim(), tasksView.filterCalendarId);
+                        text = "";
+                    }
+                }
+
+                Rectangle {
+                    visible: taskTextInput.text.trim().length > 0
+                    width: 28
+                    height: 28
+                    radius: 14
+                    anchors.right: parent.right
                     anchors.rightMargin: Theme.spacingS
-                    spacing: Theme.spacingS
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: addBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
 
                     DankIcon {
-                        name: "add"
-                        size: 18
-                        color: taskTextInput.activeFocus ? Theme.primary : Theme.surfaceVariantText
-                        Layout.alignment: Qt.AlignVCenter
+                        name: "arrow_forward"
+                        size: 16
+                        color: Theme.primaryText
+                        anchors.centerIn: parent
                     }
 
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        TextInput {
-                            id: taskTextInput
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.verticalCenterOffset: 1
-                            verticalAlignment: Text.AlignVCenter
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: Theme.surfaceText
-                            selectByMouse: true
-
-                            Text {
-                                text: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
-                                color: Theme.outlineButton
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSizeSmall
-                                visible: !taskTextInput.text && !taskTextInput.activeFocus
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-
-                            Keys.onReturnPressed: {
-                                if (taskTextInput.text.trim()) {
-                                    if (activeStore)
-                                        activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
-                                    taskTextInput.text = "";
-                                }
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        visible: taskTextInput.text.trim().length > 0
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        radius: 14
-                        color: addBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
-                        Layout.alignment: Qt.AlignVCenter
-
-                        DankIcon {
-                            name: "arrow_forward"
-                            size: 16
-                            color: Theme.primaryText
-                            anchors.centerIn: parent
-                        }
-
-                        MouseArea {
-                            id: addBtnMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (taskTextInput.text.trim()) {
-                                    if (activeStore)
-                                        activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
-                                    taskTextInput.text = "";
-                                }
+                    MouseArea {
+                        id: addBtnMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (taskTextInput.text.trim()) {
+                                if (activeStore)
+                                    activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
+                                taskTextInput.text = "";
                             }
                         }
                     }
