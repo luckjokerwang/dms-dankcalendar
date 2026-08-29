@@ -34,6 +34,16 @@ StyledRect {
     property bool quickAddExpanded: false
     property string modelSearchFilter: ""
 
+    // Input prompt history navigation (Up / Down arrows like ChatGPT / Terminal)
+    property var inputHistory: []
+    property int inputHistoryIndex: -1
+    property string temporaryDraft: ""
+
+    function copyToClipboard(txt) {
+        if (!txt) return
+        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy 2>/dev/null || printf '%s' \"$1\" | xclip -selection clipboard 2>/dev/null", "sh", txt])
+    }
+
     // Dynamic Providers & Models from ~/.config/dms-ai/providers.json
     property var configuredProviders: []
     property string activeProviderId: "agnes"
@@ -269,6 +279,8 @@ StyledRect {
         showModelMenu = false
         quickAddExpanded = false
         modelSearchFilter = ""
+        inputHistoryIndex = -1
+        temporaryDraft = ""
     }
 
     function extractProposalFromText(txt) {
@@ -307,6 +319,18 @@ StyledRect {
                     root.currentSessionId = data.id || root.currentSessionId
                     root.currentSessionTitle = data.title || "未命名会话"
                     root.messages = data.messages || []
+                    var hist = []
+                    var loadedMsgs = data.messages || []
+                    for (var i = loadedMsgs.length - 1; i >= 0; i--) {
+                        if (loadedMsgs[i].role === "user" && loadedMsgs[i].content) {
+                            if (hist.length === 0 || hist[hist.length - 1] !== loadedMsgs[i].content) {
+                                hist.push(loadedMsgs[i].content)
+                            }
+                        }
+                    }
+                    root.inputHistory = hist
+                    root.inputHistoryIndex = -1
+                    root.temporaryDraft = ""
                     Qt.callLater(() => {
                         msgListView.positionViewAtEnd()
                     })
@@ -325,6 +349,18 @@ StyledRect {
                         root.currentSessionId = data.id || root.currentSessionId
                         root.currentSessionTitle = data.title || "未命名会话"
                         root.messages = data.messages || []
+                        var hist = []
+                        var loadedMsgs = data.messages || []
+                        for (var i = loadedMsgs.length - 1; i >= 0; i--) {
+                            if (loadedMsgs[i].role === "user" && loadedMsgs[i].content) {
+                                if (hist.length === 0 || hist[hist.length - 1] !== loadedMsgs[i].content) {
+                                    hist.push(loadedMsgs[i].content)
+                                }
+                            }
+                        }
+                        root.inputHistory = hist
+                        root.inputHistoryIndex = -1
+                        root.temporaryDraft = ""
                         Qt.callLater(() => {
                             msgListView.positionViewAtEnd()
                         })
@@ -656,6 +692,16 @@ StyledRect {
             timestamp: new Date().toISOString()
         })
         messages = newMsgs
+
+        if (clean) {
+            var hist = root.inputHistory.slice()
+            if (hist.length === 0 || hist[0] !== clean) {
+                hist.unshift(clean)
+            }
+            root.inputHistory = hist
+            root.inputHistoryIndex = -1
+            root.temporaryDraft = ""
+        }
 
         chatInputField.text = ""
         isGenerating = true
@@ -992,12 +1038,17 @@ StyledRect {
                                     }
                                 }
 
-                                StyledText {
+                                TextEdit {
                                     Layout.fillWidth: true
                                     text: modelData.content || ""
                                     font.pixelSize: Theme.fontSizeSmall
                                     color: Theme.onPrimaryContainer
-                                    wrapMode: Text.WrapAnywhere
+                                    wrapMode: TextEdit.WrapAnywhere
+                                    readOnly: true
+                                    selectByMouse: true
+                                    cursorVisible: false
+                                    selectionColor: Theme.primary
+                                    selectedTextColor: Theme.onPrimary
                                 }
                             }
                         }
@@ -1010,6 +1061,7 @@ StyledRect {
                         spacing: Theme.spacingXS
 
                         RowLayout {
+                            Layout.fillWidth: true
                             spacing: Theme.spacingXS
 
                             DankIcon {
@@ -1024,6 +1076,53 @@ StyledRect {
                                 font.weight: Font.Bold
                                 color: modelData.error ? "#d32f2f" : Theme.primary
                             }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Quick Copy Button with visual feedback
+                            StyledRect {
+                                id: copyBtn
+                                property bool copied: false
+                                implicitWidth: copyRow.implicitWidth + 12
+                                implicitHeight: 22
+                                radius: 6
+                                color: copyHover.hovered ? Theme.surfaceContainerHighest : "transparent"
+
+                                Timer {
+                                    id: resetCopyTimer
+                                    interval: 2000
+                                    onTriggered: copyBtn.copied = false
+                                }
+
+                                RowLayout {
+                                    id: copyRow
+                                    anchors.centerIn: parent
+                                    spacing: 3
+
+                                    DankIcon {
+                                        name: copyBtn.copied ? "check" : "content_copy"
+                                        size: 12
+                                        color: copyBtn.copied ? "#2e7d32" : (copyHover.hovered ? Theme.primary : Theme.surfaceVariantText)
+                                    }
+
+                                    StyledText {
+                                        text: copyBtn.copied ? "已复制" : "复制"
+                                        font.pixelSize: 10
+                                        color: copyBtn.copied ? "#2e7d32" : (copyHover.hovered ? Theme.primary : Theme.surfaceVariantText)
+                                    }
+                                }
+
+                                HoverHandler { id: copyHover }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.copyToClipboard(modelData.content || "");
+                                        copyBtn.copied = true;
+                                        resetCopyTimer.restart();
+                                    }
+                                }
+                            }
                         }
 
                         StyledRect {
@@ -1034,14 +1133,20 @@ StyledRect {
                             border.width: modelData.error ? 1 : 0
                             border.color: "#d32f2f"
 
-                            StyledText {
+                            TextEdit {
                                 id: aText
                                 anchors.fill: parent
                                 anchors.margins: Theme.spacingM
                                 text: modelData.content || ""
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: modelData.error ? "#c62828" : Theme.surfaceText
-                                wrapMode: Text.WrapAnywhere
+                                wrapMode: TextEdit.WrapAnywhere
+                                readOnly: true
+                                selectByMouse: true
+                                cursorVisible: false
+                                selectionColor: Theme.primary
+                                selectedTextColor: Theme.onPrimary
+                                textFormat: TextEdit.AutoText
                             }
                         }
 
@@ -1137,14 +1242,18 @@ StyledRect {
                         color: Theme.surfaceContainerHigh
                         radius: 14
 
-                        StyledText {
+                        TextEdit {
                             id: streamingText
                             anchors.fill: parent
                             anchors.margins: Theme.spacingM
                             text: root.streamingAssistantText + " ▍"
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceText
-                            wrapMode: Text.WrapAnywhere
+                            wrapMode: TextEdit.WrapAnywhere
+                            readOnly: true
+                            selectByMouse: true
+                            cursorVisible: false
+                            textFormat: TextEdit.AutoText
                         }
                     }
                 }
@@ -1478,6 +1587,34 @@ StyledRect {
                                         root.stopGeneration()
                                     } else {
                                         root.sendMessage(text)
+                                    }
+                                }
+                            } else if (event.key === Qt.Key_Up) {
+                                if (!root.showCommandPalette) {
+                                    if (root.inputHistory.length > 0) {
+                                        if (root.inputHistoryIndex === -1) {
+                                            root.temporaryDraft = chatInputField.text
+                                        }
+                                        if (root.inputHistoryIndex < root.inputHistory.length - 1) {
+                                            root.inputHistoryIndex++
+                                            chatInputField.text = root.inputHistory[root.inputHistoryIndex]
+                                            event.accepted = true
+                                            return
+                                        }
+                                    }
+                                }
+                            } else if (event.key === Qt.Key_Down) {
+                                if (!root.showCommandPalette) {
+                                    if (root.inputHistoryIndex > 0) {
+                                        root.inputHistoryIndex--
+                                        chatInputField.text = root.inputHistory[root.inputHistoryIndex]
+                                        event.accepted = true
+                                        return
+                                    } else if (root.inputHistoryIndex === 0) {
+                                        root.inputHistoryIndex = -1
+                                        chatInputField.text = root.temporaryDraft
+                                        event.accepted = true
+                                        return
                                     }
                                 }
                             } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {

@@ -54,7 +54,7 @@ Item {
                 border.width: taskTextInput.activeFocus ? 2 : 1
                 border.color: taskTextInput.activeFocus ? Theme.primary : Theme.outlineMedium
 
-                Row {
+                RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Theme.spacingM
                     anchors.rightMargin: Theme.spacingS
@@ -64,42 +64,48 @@ Item {
                         name: "add"
                         size: 20
                         color: taskTextInput.activeFocus ? Theme.primary : Theme.surfaceVariantText
-                        anchors.verticalCenter: parent.verticalCenter
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
-                    TextInput {
-                        id: taskTextInput
-                        width: parent.width - 64
-                        verticalAlignment: Text.AlignVCenter
-                        color: Theme.surfaceText
-                        font.pixelSize: Theme.fontSizeSmall
-                        anchors.verticalCenter: parent.verticalCenter
-                        selectByMouse: true
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
 
-                        Text {
-                            text: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
-                            color: Theme.outlineButton
-                            font.pixelSize: Theme.fontSizeSmall
-                            visible: !taskTextInput.text && !taskTextInput.activeFocus
+                        TextInput {
+                            id: taskTextInput
+                            anchors.left: parent.left
+                            anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                        }
+                            verticalAlignment: Text.AlignVCenter
+                            color: Theme.surfaceText
+                            font.pixelSize: Theme.fontSizeSmall
+                            selectByMouse: true
 
-                        Keys.onReturnPressed: {
-                            if (taskTextInput.text.trim()) {
-                                if (activeStore)
-                                    activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
-                                taskTextInput.text = "";
+                            Text {
+                                text: "添加新待办任务… (可输入 !1, !2, !3 设定优先级)"
+                                color: Theme.outlineButton
+                                font.pixelSize: Theme.fontSizeSmall
+                                visible: !taskTextInput.text && !taskTextInput.activeFocus
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            Keys.onReturnPressed: {
+                                if (taskTextInput.text.trim()) {
+                                    if (activeStore)
+                                        activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
+                                    taskTextInput.text = "";
+                                }
                             }
                         }
                     }
 
                     Rectangle {
                         visible: taskTextInput.text.trim().length > 0
-                        width: 28
-                        height: 28
+                        implicitWidth: 28
+                        implicitHeight: 28
                         radius: 14
                         color: addBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
-                        anchors.verticalCenter: parent.verticalCenter
+                        Layout.alignment: Qt.AlignVCenter
 
                         DankIcon {
                             name: "arrow_forward"
