@@ -287,11 +287,11 @@ def main():
 
     # Route provider dynamically if needed
     cfg_base_url, cfg_api_key, cfg_model = load_active_provider_from_config(model)
-    if not base_url and cfg_base_url:
+    if cfg_base_url:
         base_url = cfg_base_url
-    if not api_key and cfg_api_key:
+    if cfg_api_key:
         api_key = cfg_api_key
-    if not model and cfg_model:
+    if cfg_model:
         model = cfg_model
 
     if not base_url:

@@ -16,7 +16,7 @@ StyledRect {
     property string pasteHelperPath: ""
     property string providerScriptPath: Qt.resolvedUrl("../../provider-manager").toString().replace(/^file:\/\//, "")
 
-    property string aiBaseUrl: "https://apihub.agnes-ai.com/v1"
+    property string aiBaseUrl: ""
     property string aiApiKey: ""
     property string aiModel: "agnes-2.5-flash"
     property string customSystemPrompt: ""
@@ -559,6 +559,18 @@ StyledRect {
         aiModel = modelId
         if (providerId) {
             activeProviderId = providerId
+        } else if (configuredProviders && configuredProviders.length > 0) {
+            for (var i = 0; i < configuredProviders.length; i++) {
+                var p = configuredProviders[i]
+                if (p.models) {
+                    for (var j = 0; j < p.models.length; j++) {
+                        if (p.models[j].id === modelId) {
+                            activeProviderId = p.id
+                            break
+                        }
+                    }
+                }
+            }
         }
         showModelMenu = false
 
