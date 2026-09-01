@@ -94,6 +94,14 @@ def handle_provider(args):
     elif args.action == "fetch-models":
         res = ProviderService.fetch_models(args.id, custom_base_url=args.base_url, custom_api_key=args.api_key)
         print(json.dumps(res, ensure_ascii=False))
+    elif args.action == "benchmark":
+        res = ProviderService.benchmark_model(
+            model_id=args.model,
+            provider_id=args.id,
+            custom_base_url=args.base_url,
+            custom_api_key=args.api_key
+        )
+        print(json.dumps(res, ensure_ascii=False))
 
 def handle_session(args):
     if args.action == "list":
@@ -171,7 +179,7 @@ def main():
 
     # Provider subparser
     p_provider = subparsers.add_parser("provider")
-    p_provider.add_argument("action", choices=["list", "get-presets", "save", "delete", "set-active", "fetch-models"])
+    p_provider.add_argument("action", choices=["list", "get-presets", "save", "delete", "set-active", "fetch-models", "benchmark"])
     p_provider.add_argument("--id", default="")
     p_provider.add_argument("--base-url", default=None)
     p_provider.add_argument("--api-key", default=None)

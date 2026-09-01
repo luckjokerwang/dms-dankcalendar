@@ -24,8 +24,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#1565c0",
         "desc": "官方深度推理与排程模型",
         "models": [
-            {"id": "deepseek-chat", "name": "DeepSeek-V3", "desc": "通用大模型"},
-            {"id": "deepseek-reasoner", "name": "DeepSeek-R1", "desc": "深度推理大模型"}
+            {"id": "deepseek-chat", "name": "DeepSeek-V3", "desc": "通用大模型", "vision": False},
+            {"id": "deepseek-reasoner", "name": "DeepSeek-R1", "desc": "深度推理大模型", "vision": False}
         ]
     },
     {
@@ -36,8 +36,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#7c3aed",
         "desc": "海量开源大模型高速中继",
         "models": [
-            {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3", "desc": "高速中继"},
-            {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek R1", "desc": "深度思考中继"}
+            {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek V3", "desc": "高速中继", "vision": False},
+            {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek R1", "desc": "深度思考中继", "vision": False}
         ]
     },
     {
@@ -48,8 +48,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#0ea5e9",
         "desc": "商汤日日新官方大模型端点",
         "models": [
-            {"id": "SenseChat-5", "name": "SenseChat 5.0", "desc": "旗舰模型"},
-            {"id": "SenseChat-5-Cantonese", "name": "SenseChat 5.0 粤语版", "desc": "多语言方言"}
+            {"id": "SenseChat-5", "name": "SenseChat 5.0", "desc": "旗舰模型", "vision": False},
+            {"id": "SenseChat-5-Cantonese", "name": "SenseChat 5.0 粤语版", "desc": "多语言方言", "vision": False}
         ]
     },
     {
@@ -60,9 +60,9 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#ff6a00",
         "desc": "阿里云通义千问官方兼容端点",
         "models": [
-            {"id": "qwen-plus", "name": "通义千问 Plus", "desc": "主力模型"},
-            {"id": "qwen-turbo", "name": "通义千问 Turbo", "desc": "极速推理"},
-            {"id": "qwen-max", "name": "通义千问 Max", "desc": "深度规划"}
+            {"id": "qwen-plus", "name": "通义千问 Plus", "desc": "主力模型", "vision": False},
+            {"id": "qwen-turbo", "name": "通义千问 Turbo", "desc": "极速推理", "vision": False},
+            {"id": "qwen-max", "name": "通义千问 Max", "desc": "深度规划", "vision": False}
         ]
     },
     {
@@ -73,8 +73,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#10a37f",
         "desc": "GPT-4o / o1 / o3 官方接口",
         "models": [
-            {"id": "gpt-4o", "name": "GPT-4o", "desc": "全能多模态"},
-            {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "desc": "极速轻量"}
+            {"id": "gpt-4o", "name": "GPT-4o", "desc": "全能多模态", "vision": True},
+            {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "desc": "极速轻量", "vision": True}
         ]
     },
     {
@@ -85,8 +85,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#d97706",
         "desc": "Claude 3.7 Sonnet 官方与代理接口",
         "models": [
-            {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "desc": "混合推理"},
-            {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "desc": "极速响应"}
+            {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "desc": "混合推理", "vision": True},
+            {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "desc": "极速响应", "vision": True}
         ]
     },
     {
@@ -97,8 +97,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#4285f4",
         "desc": "Gemini 2.0 Flash / Pro 官方接口",
         "models": [
-            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "desc": "新一代多模态"},
-            {"id": "gemini-2.0-pro-exp-02-05", "name": "Gemini 2.0 Pro", "desc": "高级规划推理"}
+            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "desc": "新一代多模态", "vision": True},
+            {"id": "gemini-2.0-pro-exp-02-05", "name": "Gemini 2.0 Pro", "desc": "高级规划推理", "vision": True}
         ]
     },
     {
@@ -109,8 +109,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#212121",
         "desc": "本地离线私有化模型服务",
         "models": [
-            {"id": "deepseek-r1:latest", "name": "DeepSeek-R1 (Local)", "desc": "本地离线推理"},
-            {"id": "qwen2.5:latest", "name": "Qwen 2.5 (Local)", "desc": "本地通用"}
+            {"id": "deepseek-r1:latest", "name": "DeepSeek-R1 (Local)", "desc": "本地离线推理", "vision": False},
+            {"id": "qwen2.5:latest", "name": "Qwen 2.5 (Local)", "desc": "本地通用", "vision": False}
         ]
     },
     {
@@ -130,8 +130,8 @@ PRESET_PROVIDERS: List[Dict[str, Any]] = [
         "color": "#e65100",
         "desc": "Agnes 高速排程专用中继",
         "models": [
-            {"id": "agnes-2.5-flash", "name": "Agnes 2.5 Flash", "desc": "高速排程 (推荐)"},
-            {"id": "agnes-2.5-pro", "name": "Agnes 2.5 Pro", "desc": "复杂深度规划"}
+            {"id": "agnes-2.5-flash", "name": "Agnes 2.5 Flash", "desc": "高速排程 (推荐)", "vision": True},
+            {"id": "agnes-2.5-pro", "name": "Agnes 2.5 Pro", "desc": "复杂深度规划", "vision": True}
         ]
     },
     {
@@ -270,17 +270,31 @@ class ProviderService:
                 elif isinstance(data, list):
                     raw_models = data
 
+                # Build vision map from target provider or presets
+                existing_vision_map: Dict[str, bool] = {}
+                if target_prov:
+                    for em in target_prov.get("models", []):
+                        if em.get("id"):
+                            existing_vision_map[em["id"]] = em.get("vision", False)
+                for preset in PRESET_PROVIDERS:
+                    for pm in preset.get("models", []):
+                        if pm.get("id") and pm["id"] not in existing_vision_map:
+                            existing_vision_map[pm["id"]] = pm.get("vision", False)
+
                 parsed_models = []
                 for m in raw_models:
                     if isinstance(m, dict) and "id" in m:
                         m_id = m["id"]
+                        is_vision = existing_vision_map.get(m_id, False)
                         parsed_models.append({
                             "id": m_id,
                             "name": m.get("name") or m_id,
-                            "desc": f"上下文: {m.get('context_length')}" if m.get('context_length') else "通用大模型"
+                            "desc": f"上下文: {m.get('context_length')}" if m.get('context_length') else "通用大模型",
+                            "vision": is_vision
                         })
                     elif isinstance(m, str):
-                        parsed_models.append({"id": m, "name": m, "desc": "通用大模型"})
+                        is_vision = existing_vision_map.get(m, False)
+                        parsed_models.append({"id": m, "name": m, "desc": "通用大模型", "vision": is_vision})
 
                 return {
                     "status": "ok",
@@ -299,3 +313,111 @@ class ProviderService:
             return {"status": "error", "message": f"HTTP {e.code}: {err_msg}"}
         except Exception as e:
             return {"status": "error", "message": f"连接失败: {str(e)}"}
+
+    @classmethod
+    def benchmark_model(
+        cls,
+        model_id: str,
+        provider_id: Optional[str] = None,
+        custom_base_url: Optional[str] = None,
+        custom_api_key: Optional[str] = None,
+        timeout: float = 12.0
+    ) -> Dict[str, Any]:
+        cfg = cls.load_config()
+        target_prov = None
+        if provider_id:
+            for p in cfg.get("providers", []):
+                if p.get("id") == provider_id:
+                    target_prov = p
+                    break
+
+        if not target_prov and not custom_base_url:
+            for p in cfg.get("providers", []):
+                for m in p.get("models", []):
+                    if m.get("id") == model_id:
+                        target_prov = p
+                        break
+                if target_prov:
+                    break
+
+        base_url = custom_base_url or (target_prov.get("baseUrl") if target_prov else "")
+        api_key = custom_api_key or (target_prov.get("apiKey") if target_prov else "")
+
+        if not base_url and provider_id:
+            for preset in PRESET_PROVIDERS:
+                if preset["id"] == provider_id:
+                    base_url = preset["baseUrl"]
+                    break
+
+        if not base_url:
+            return {"status": "error", "model": model_id, "message": "缺少 API Base URL 地址"}
+
+        clean_base = base_url.rstrip("/")
+        req_url = f"{clean_base}/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream, application/json",
+            "User-Agent": "DankCalendar/3.0"
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 10,
+            "stream": True
+        }
+
+        start_time = time.time()
+        ttfb = None
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(req_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+                while True:
+                    line_bytes = resp.readline()
+                    if not line_bytes:
+                        break
+                    line = line_bytes.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    if line.startswith("data:"):
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                if delta.get("content") and ttfb is None:
+                                    ttfb = int((time.time() - start_time) * 1000)
+                        except Exception:
+                            pass
+
+                total_duration = int((time.time() - start_time) * 1000)
+                if ttfb is None:
+                    ttfb = total_duration
+
+                return {
+                    "status": "ok",
+                    "model": model_id,
+                    "latency": ttfb,
+                    "totalMs": total_duration,
+                    "message": f"测速成功: 首字 {ttfb}ms / 总计 {total_duration}ms"
+                }
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")
+                err_json = json.loads(err_body)
+                err_msg = err_json.get("error", {}).get("message") or str(err_json)
+            except Exception:
+                err_msg = err_body or str(e)
+            return {"status": "error", "model": model_id, "message": f"HTTP {e.code}: {err_msg}"}
+        except Exception as e:
+            return {"status": "error", "model": model_id, "message": f"测速失败: {str(e)}"}
+

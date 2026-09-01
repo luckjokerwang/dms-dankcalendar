@@ -32,6 +32,85 @@ PluginSettings {
     property string testResultText: ""
     property bool testSuccess: false
 
+    // Realtime Concurrent Model Benchmarking State (Per Model Latency Cache)
+    property var modelBenchmarkMap: ({})
+
+    Component {
+        id: benchmarkProcComp
+        Process {
+            id: bProc
+            property string targetModelId: ""
+            command: []
+            running: false
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    var trimmed = (text || "").trim();
+                    if (!trimmed) {
+                        bProc.destroy();
+                        return;
+                    }
+                    try {
+                        var res = JSON.parse(trimmed);
+                        var map = Object.assign({}, root.modelBenchmarkMap);
+                        var mKey = res.model || bProc.targetModelId;
+                        map[mKey] = {
+                            latency: res.latency || 0,
+                            totalMs: res.totalMs || 0,
+                            status: res.status || "error",
+                            message: res.message || ""
+                        };
+                        root.modelBenchmarkMap = map;
+                    } catch (e) {
+                        var errMap = Object.assign({}, root.modelBenchmarkMap);
+                        errMap[bProc.targetModelId] = { status: "error", message: "解析失败" };
+                        root.modelBenchmarkMap = errMap;
+                    }
+                    bProc.destroy();
+                }
+            }
+            onExited: (code) => {
+                if (bProc.targetModelId && (!root.modelBenchmarkMap[bProc.targetModelId] || root.modelBenchmarkMap[bProc.targetModelId].status === "loading")) {
+                    var m = Object.assign({}, root.modelBenchmarkMap);
+                    m[bProc.targetModelId] = { status: "error", message: "执行异常退出 (" + code + ")" };
+                    root.modelBenchmarkMap = m;
+                }
+                bProc.destroy();
+            }
+        }
+    }
+
+    function benchmarkModel(providerId, modelId, baseUrl, apiKey) {
+        if (!modelId) return;
+        var map = Object.assign({}, root.modelBenchmarkMap);
+        map[modelId] = { status: "loading" };
+        root.modelBenchmarkMap = map;
+
+        var cmd = [
+            Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
+            "provider", "benchmark",
+            "--id", providerId || "",
+            "--model", modelId
+        ];
+        if (baseUrl) cmd.push("--base-url", baseUrl);
+        if (apiKey) cmd.push("--api-key", apiKey);
+
+        var p = benchmarkProcComp.createObject(root, {
+            "targetModelId": modelId,
+            "command": cmd
+        });
+        if (p) {
+            p.running = true;
+        }
+    }
+
+    function benchmarkAllModels(providerObj) {
+        if (!providerObj || !providerObj.models) return;
+        for (var i = 0; i < providerObj.models.length; i++) {
+            var m = providerObj.models[i];
+            benchmarkModel(providerObj.id, m.id, providerObj.baseUrl, providerObj.apiKey);
+        }
+    }
+
     Process {
         id: testModelsProc
         command: []
@@ -89,11 +168,19 @@ PluginSettings {
         editProviderName = p.name || "";
         editProviderBaseUrl = p.baseUrl || "https://";
         editProviderApiKey = p.apiKey || "";
-        editProviderFetchedModels = p.models || [];
+        var fetched = [];
         var ids = [];
         for (var i = 0; i < (p.models || []).length; i++) {
-            ids.push(p.models[i].id);
+            var m = p.models[i];
+            fetched.push({
+                "id": m.id,
+                "name": m.name || m.id,
+                "desc": m.desc || "模型",
+                "vision": !!m.vision
+            });
+            ids.push(m.id);
         }
+        editProviderFetchedModels = fetched;
         editProviderSelectedModelIds = ids;
         customModelInput = "";
         testResultText = "";
@@ -114,11 +201,19 @@ PluginSettings {
         editProviderName = preset.name || "";
         editProviderBaseUrl = preset.baseUrl || "https://";
         editProviderApiKey = "";
-        editProviderFetchedModels = preset.models || [];
+        var fetched = [];
         var ids = [];
         for (var j = 0; j < (preset.models || []).length; j++) {
-            ids.push(preset.models[j].id);
+            var pm = preset.models[j];
+            fetched.push({
+                "id": pm.id,
+                "name": pm.name || pm.id,
+                "desc": pm.desc || "预设模型",
+                "vision": !!pm.vision
+            });
+            ids.push(pm.id);
         }
+        editProviderFetchedModels = fetched;
         editProviderSelectedModelIds = ids;
         customModelInput = "";
         testResultText = "";
@@ -141,6 +236,19 @@ PluginSettings {
         editProviderSelectedModelIds = arr;
     }
 
+    function toggleModelVision(modelId) {
+        var list = root.editProviderFetchedModels.slice();
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === modelId) {
+                var item = Object.assign({}, list[i]);
+                item.vision = !item.vision;
+                list[i] = item;
+                break;
+            }
+        }
+        root.editProviderFetchedModels = list;
+    }
+
     function addCustomModel() {
         var mid = customModelInput.trim();
         if (!mid) return;
@@ -155,7 +263,8 @@ PluginSettings {
             var newModels = editProviderFetchedModels.concat([{
                 "id": mid,
                 "name": mid,
-                "desc": "用户自定义模型"
+                "desc": "用户自定义模型",
+                "vision": false
             }]);
             editProviderFetchedModels = newModels;
         }
@@ -437,12 +546,14 @@ PluginSettings {
                             Repeater {
                                 model: root.editProviderFetchedModels
                                 delegate: Rectangle {
+                                    id: editChip
                                     required property var modelData
                                     readonly property bool selected: root.isModelSelected(modelData.id)
+                                    readonly property bool isVision: !!modelData.vision
 
                                     implicitWidth: chipRow.implicitWidth + 14
-                                    implicitHeight: 26
-                                    radius: 13
+                                    implicitHeight: 28
+                                    radius: 14
                                     color: selected ? Theme.withAlpha(Theme.primary, 0.2) : Theme.surfaceContainerHigh
                                     border.width: 1
                                     border.color: selected ? Theme.primary : Theme.outlineVariant
@@ -450,24 +561,48 @@ PluginSettings {
                                     RowLayout {
                                         id: chipRow
                                         anchors.centerIn: parent
-                                        spacing: 4
+                                        spacing: 5
 
                                         DankIcon {
                                             name: selected ? "check_circle" : "radio_button_unchecked"
-                                            size: 13
+                                            size: 14
                                             color: selected ? Theme.primary : Theme.surfaceVariantText
                                         }
 
                                         StyledText {
                                             text: modelData.name || modelData.id
-                                            font.pixelSize: 10
+                                            font.pixelSize: 11
                                             font.weight: selected ? Font.Bold : Font.Normal
                                             color: selected ? Theme.primary : Theme.surfaceText
+                                        }
+
+                                        // Manual Vision Toggle Icon Button
+                                        Rectangle {
+                                            implicitWidth: 20
+                                            implicitHeight: 20
+                                            radius: 10
+                                            color: isVision ? Theme.primary : Theme.surfaceContainerHighest
+                                            border.width: 1
+                                            border.color: isVision ? Theme.primary : Theme.outlineVariant
+
+                                            DankIcon {
+                                                anchors.centerIn: parent
+                                                name: isVision ? "visibility" : "visibility_off"
+                                                size: 12
+                                                color: isVision ? "#ffffff" : Theme.surfaceVariantText
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.toggleModelVision(modelData.id)
+                                            }
                                         }
                                     }
 
                                     MouseArea {
                                         anchors.fill: parent
+                                        z: -1
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.toggleModelSelection(modelData.id)
                                     }
@@ -685,6 +820,12 @@ PluginSettings {
 
                                 // Action Buttons
                                 DankActionButton {
+                                    iconName: "bolt"
+                                    visible: (modelData.models || []).length > 0
+                                    onClicked: root.benchmarkAllModels(modelData)
+                                }
+
+                                DankActionButton {
                                     iconName: "edit"
                                     onClicked: root.openEditProvider(modelData)
                                 }
@@ -699,29 +840,88 @@ PluginSettings {
                             // Model Chips
                             Flow {
                                 width: parent.width
-                                spacing: 4
+                                spacing: 6
                                 Repeater {
                                     model: modelData.models || []
                                     delegate: Rectangle {
+                                        id: mChip
                                         required property var modelData
                                         readonly property bool isSelected: providerStore.activeModelId === modelData.id && provCard.isPrimary
+                                        readonly property var benchInfo: root.modelBenchmarkMap[modelData.id] || null
+                                        readonly property bool isBenchmarking: benchInfo && benchInfo.status === "loading"
 
-                                        implicitWidth: mTxt.implicitWidth + 12
-                                        implicitHeight: 22
-                                        radius: 4
+                                        implicitWidth: mChipRow.implicitWidth + 12
+                                        implicitHeight: 26
+                                        radius: 13
                                         color: isSelected ? Theme.primary : Theme.surfaceContainerHigh
+                                        border.width: 1
+                                        border.color: isSelected ? Theme.primary : Theme.outlineVariant
 
-                                        StyledText {
-                                            id: mTxt
+                                        RowLayout {
+                                            id: mChipRow
                                             anchors.centerIn: parent
-                                            text: modelData.name || modelData.id
-                                            font.pixelSize: 10
-                                            font.weight: isSelected ? Font.Bold : Font.Normal
-                                            color: isSelected ? "#ffffff" : Theme.surfaceText
+                                            spacing: 4
+
+                                            // Vision icon indicator if model supports vision
+                                            DankIcon {
+                                                visible: !!modelData.vision
+                                                name: "visibility"
+                                                size: 13
+                                                color: isSelected ? "#ffffff" : Theme.primary
+                                            }
+
+                                            StyledText {
+                                                text: modelData.name || modelData.id
+                                                font.pixelSize: 10
+                                                font.weight: isSelected ? Font.Bold : Font.Normal
+                                                color: isSelected ? "#ffffff" : Theme.surfaceText
+                                            }
+
+                                            // Benchmark Speed tag
+                                            StyledText {
+                                                visible: !!benchInfo && benchInfo.status === "ok"
+                                                text: "⚡" + (benchInfo ? benchInfo.latency : 0) + "ms"
+                                                font.pixelSize: 9
+                                                font.weight: Font.Bold
+                                                color: isSelected ? "#e0e7ff" : "#16a34a"
+                                            }
+
+                                            StyledText {
+                                                visible: !!benchInfo && benchInfo.status === "error"
+                                                text: "❌"
+                                                font.pixelSize: 9
+                                                color: isSelected ? "#fecaca" : Theme.error
+                                            }
+
+                                            // Speed test trigger button
+                                            Rectangle {
+                                                implicitWidth: 18
+                                                implicitHeight: 18
+                                                radius: 9
+                                                color: isSelected ? Theme.withAlpha("#ffffff", 0.25) : Theme.surfaceContainerHighest
+                                                border.width: 1
+                                                border.color: isSelected ? Theme.withAlpha("#ffffff", 0.4) : Theme.outlineVariant
+
+                                                DankIcon {
+                                                    anchors.centerIn: parent
+                                                    name: isBenchmarking ? "hourglass_top" : "bolt"
+                                                    size: 11
+                                                    color: isSelected ? "#ffffff" : Theme.primary
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.benchmarkModel(provCard.modelData.id, modelData.id, provCard.modelData.baseUrl, provCard.modelData.apiKey);
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         MouseArea {
                                             anchors.fill: parent
+                                            z: -1
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 providerStore.setActive(provCard.modelData.id, modelData.id);

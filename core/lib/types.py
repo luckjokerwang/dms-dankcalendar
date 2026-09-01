@@ -77,6 +77,7 @@ class ModelItem(TypedDict, total=False):
     name: str
     desc: Optional[str]
     contextWindow: Optional[int]
+    vision: Optional[bool]
 
 class ProviderConfig(TypedDict, total=False):
     id: str

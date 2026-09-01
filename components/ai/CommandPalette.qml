@@ -116,6 +116,7 @@ StyledRect {
                     "id": m.id,
                     "name": m.name || m.id,
                     "desc": m.desc || (p.name + " 实时模型"),
+                    "vision": !!m.vision,
                     "providerId": p.id,
                     "providerName": p.name,
                     "providerIcon": p.icon || "smart_toy",
@@ -400,6 +401,32 @@ StyledRect {
                                         font.pixelSize: 9
                                         font.weight: Font.Bold
                                         color: (root.selectedIndex === index) ? "#ffffff" : (modelData.providerColor || Theme.primary)
+                                    }
+                                }
+
+                                // Vision Badge
+                                StyledRect {
+                                    visible: root.currentMode === "model" && !!modelData.vision
+                                    implicitWidth: vBadgeRow.implicitWidth + 8
+                                    implicitHeight: 16
+                                    radius: 4
+                                    color: (root.selectedIndex === index) ? Qt.rgba(0,0,0,0.2) : Theme.withAlpha(Theme.primary, 0.15)
+
+                                    RowLayout {
+                                        id: vBadgeRow
+                                        anchors.centerIn: parent
+                                        spacing: 2
+                                        DankIcon {
+                                            name: "visibility"
+                                            size: 10
+                                            color: (root.selectedIndex === index) ? "#ffffff" : Theme.primary
+                                        }
+                                        StyledText {
+                                            text: "视觉"
+                                            font.pixelSize: 9
+                                            font.weight: Font.Bold
+                                            color: (root.selectedIndex === index) ? "#ffffff" : Theme.primary
+                                        }
                                     }
                                 }
 

@@ -33,7 +33,8 @@ Item {
                         "icon": p.icon || "smart_toy",
                         "color": p.color || Theme.primary,
                         "baseUrl": p.baseUrl,
-                        "apiKey": p.apiKey || ""
+                        "apiKey": p.apiKey || "",
+                        "vision": !!m.vision
                     });
                 }
             }
