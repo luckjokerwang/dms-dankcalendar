@@ -69,6 +69,8 @@ PluginComponent {
         defaultValue: "agenda"
     }
     readonly property string barModule: (globalBarModule.value === "tasks") ? "tasks" : "agenda"
+    onActiveModuleChanged: root.refreshAll()
+    onBarModuleChanged: root.refreshAll()
 
     // Popout Dimensions & Actions
     popoutWidth: constants.defaultPopoutWidth
@@ -462,6 +464,7 @@ PluginComponent {
             id: popout
             width: root.popoutWidth
             spacing: Theme.spacingM
+            Component.onCompleted: root.refreshAll()
 
             // 1. Popout Top Header
             PopoutHeader {

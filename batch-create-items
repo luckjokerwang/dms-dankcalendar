@@ -1,205 +1,39 @@
 #!/usr/bin/env python3
 """
 batch-create-items
-Atomically creates multiple events and tasks in dcal via IPC.
-Maps title -> summary, ensures RFC3339 with timezone offset, and resolves calendars.
-Fixes UTC timezone shift for tasks by setting date-only dues to 23:59:59.
+Atomically creates multiple events and tasks in dcal via unified TaskService.
+Automatically handles date-time formatting, calendar resolution, and LLM auto-tagging.
 """
 
 import sys
+import os
 import json
-import subprocess
-import shutil
-import datetime
-import re
 
-def get_local_tz_offset():
-    """Returns local timezone offset string like '+08:00'."""
-    now = datetime.datetime.now(datetime.timezone.utc).astimezone()
-    offset = now.strftime("%z") # e.g. "+0800"
-    if len(offset) == 5:
-        return offset[:3] + ":" + offset[3:]
-    return "+08:00"
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, ROOT_DIR)
 
-def format_rfc3339(dt_str, is_task_due=False):
-    """Ensures datetime string is strictly valid RFC3339 with timezone offset."""
-    if not dt_str:
-        return ""
-    dt_str = dt_str.strip()
-    
-    # If already has timezone (Z or +HH:MM or -HH:MM)
-    if dt_str.endswith("Z") or re.search(r"[+-]\d{2}:\d{2}$", dt_str):
-        return dt_str
-    
-    dt_str = dt_str.replace(" ", "T")
-    if len(dt_str) == 10: # Date only (YYYY-MM-DD)
-        if is_task_due:
-            dt_str += "T23:59:59"
-        else:
-            dt_str += "T00:00:00"
-    elif len(dt_str) == 16: # YYYY-MM-DDTHH:MM
-        dt_str += ":00"
-        
-    return dt_str + get_local_tz_offset()
-
-def run_dcal_cmd(args):
-    """Executes a dcal ipc command safely."""
-    cmd = ["dcal", "ipc"] + args
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        return res.returncode == 0, res.stdout.strip(), res.stderr.strip()
-    except Exception as e:
-        return False, "", str(e)
-
-def get_calendars_map():
-    """Fetches calendars from dcal and returns default event/task calendar IDs."""
-    event_cal_id = ""
-    task_cal_id = ""
-    cal_name_to_id = {}
-
-    ok, out, _ = run_dcal_cmd(["calendars.list"])
-    if ok and out:
-        try:
-            items = json.loads(out)
-            if not isinstance(items, list):
-                items = items.get("calendars", [])
-            for c in items:
-                cid = c.get("id", "")
-                cname = c.get("name", "")
-                holds_tasks = c.get("holdsTasks", False)
-                if cname:
-                    cal_name_to_id[cname.lower()] = cid
-                if cid:
-                    cal_name_to_id[cid.lower()] = cid
-
-                if holds_tasks:
-                    if not task_cal_id:
-                        task_cal_id = cid
-                else:
-                    if not event_cal_id:
-                        event_cal_id = cid
-        except Exception:
-            pass
-    return event_cal_id, task_cal_id, cal_name_to_id
+from core.lib.task_service import TaskService
 
 def main():
-    if not shutil.which("dcal"):
-        print(json.dumps({"status": "error", "message": "dcal is not installed"}))
+    if len(sys.argv) < 2:
+        print(json.dumps({"status": "error", "message": "Missing payload"}))
         sys.exit(1)
-
-    raw_input = ""
-    if len(sys.argv) > 1:
-        raw_input = sys.argv[1]
-    else:
-        raw_input = sys.stdin.read()
-
-    if not raw_input.strip():
-        print(json.dumps({"status": "error", "message": "Empty input"}))
-        sys.exit(1)
-
+    
+    raw_input = sys.argv[1]
     try:
         payload = json.loads(raw_input)
     except Exception as e:
         print(json.dumps({"status": "error", "message": f"Invalid JSON: {e}"}))
         sys.exit(1)
 
-    default_event_cal, default_task_cal, name_to_id = get_calendars_map()
-    
-    events = payload.get("events", [])
-    tasks = payload.get("tasks", [])
-    
-    created_events = 0
-    created_tasks = 0
-    errors = []
-
-    # 1. Create Events
-    for ev in events:
-        summary = ev.get("summary") or ev.get("title", "").strip()
-        start = format_rfc3339(ev.get("start", ""), is_task_due=False)
-        end = format_rfc3339(ev.get("end", ""), is_task_due=False)
-        all_day = ev.get("allDay", False)
-
-        # Resolve calendar ID
-        cal_spec = (ev.get("calendarId") or ev.get("calendarName") or "").strip().lower()
-        cal_id = name_to_id.get(cal_spec) or default_event_cal
-
-        if not summary or not start:
-            continue
-
-        if not end:
-            try:
-                dt_start = datetime.datetime.fromisoformat(start)
-                dt_end = dt_start + datetime.timedelta(minutes=30)
-                end = dt_end.isoformat()
-            except Exception:
-                end = start
-
-        args = [
-            "events.create",
-            f"calendarId={cal_id}",
-            f"summary={summary}",
-            f"start={start}",
-            f"end={end}"
-        ]
-        if all_day:
-            args.append("allDay=true")
-
-        ok, _, err = run_dcal_cmd(args)
-        if ok:
-            created_events += 1
-        else:
-            errors.append(f"Event '{summary}': {err}")
-
-    # 2. Create Tasks
-    for tk in tasks:
-        summary = tk.get("summary") or tk.get("title", "").strip()
-        due = format_rfc3339(tk.get("due", ""), is_task_due=True) if tk.get("due") else ""
-        priority = tk.get("priority", 0)
-
-        cal_spec = (tk.get("calendarId") or tk.get("calendarName") or "").strip().lower()
-        cal_id = name_to_id.get(cal_spec) or default_task_cal
-
-        if not summary:
-            continue
-
-        args = [
-            "tasks.create",
-            f"calendarId={cal_id}",
-            f"summary={summary}"
-        ]
-        if due:
-            args.append(f"due={due}")
-        if priority is not None:
-            args.append(f"priority={priority}")
-
-        ok, out, err = run_dcal_cmd(args)
-        if ok:
-            created_tasks += 1
-            if priority and out:
-                try:
-                    res_obj = json.loads(out)
-                    tid = res_obj.get("id")
-                    if tid:
-                        import sqlite3, os
-                        db_p = os.path.expanduser("~/.local/share/dankcal/dankcal.db")
-                        if os.path.exists(db_p):
-                            conn = sqlite3.connect(db_p)
-                            c = conn.cursor()
-                            c.execute("UPDATE tasks SET priority = ? WHERE id = ?", (priority, tid))
-                            conn.commit()
-                            conn.close()
-                except Exception:
-                    pass
-        else:
-            errors.append(f"Task '{summary}': {err}")
-
-    result = {
-        "status": "ok" if created_events > 0 or created_tasks > 0 or not (events or tasks) else "error",
-        "createdEvents": created_events,
-        "createdTasks": created_tasks,
-        "errors": errors
-    }
-    print(json.dumps(result, ensure_ascii=False))
+    try:
+        service = TaskService()
+        res = service.batch_create(payload)
+        res["status"] = "ok" if res.get("success") else "error"
+        print(json.dumps(res, ensure_ascii=False))
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

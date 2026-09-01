@@ -2,6 +2,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Common
+import qs.Widgets
+import qs.Modules.Plugins
 
 Item {
     id: store
@@ -18,6 +20,31 @@ Item {
     property var allTags: []
     property bool tasksLoading: false
     property bool isClassifyingBatch: false
+    property int refreshInterval: 10000
+
+    // Multi-Monitor / Cross-Process Synchronization via PluginGlobalVar
+    PluginGlobalVar {
+        id: globalTasksRevision
+        varName: "dankCalendarTasksRevision"
+        defaultValue: 0
+        onValueChanged: {
+            store.fetchTasks();
+        }
+    }
+
+    Timer {
+        id: autoSyncTimer
+        interval: store.refreshInterval
+        running: store.refreshInterval > 0
+        repeat: true
+        onTriggered: {
+            store.fetchTasks();
+        }
+    }
+
+    function notifyTasksChanged() {
+        globalTasksRevision.set(Date.now());
+    }
 
     // Action Queue for robust sequential writes
     property var taskActionQueue: []
@@ -60,10 +87,10 @@ Item {
         onExited: (code) => {
             if (code !== 0) {
                 console.warn("[TaskStore] Task action failed with exit code:", code);
-                store.fetchTasks();
             }
             store.isActionRunning = false;
             store.processNextTaskAction();
+            store.notifyTasksChanged();
         }
     }
 
@@ -102,6 +129,7 @@ Item {
         running: false
         onExited: (code) => {
             store.fetchTasks();
+            store.notifyTasksChanged();
         }
     }
 

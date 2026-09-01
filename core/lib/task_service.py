@@ -120,6 +120,10 @@ class TaskService:
             summary = (t.get("summary") or t.get("title") or "").strip()
             if not summary:
                 continue
+            if not TagService.extract_tags(summary):
+                c_res = TaskClassifier.classify_single(summary)
+                if c_res and c_res.get("taggedSummary"):
+                    summary = c_res["taggedSummary"]
             cal_id = t.get("calendarId") or default_task_cal_id
             p = int(t.get("priority", 0))
             due = t.get("due")
