@@ -412,7 +412,7 @@ PluginComponent {
 
                         StyledText {
                             Layout.fillWidth: true
-                            text: "Dank Calendar AI 排程助理"
+                            text: "Dank Calendar Plus AI 排程助理"
                             font.pixelSize: Theme.fontSizeMedium
                             font.weight: Font.Bold
                             color: Theme.surfaceText

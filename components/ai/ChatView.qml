@@ -1291,7 +1291,7 @@ StyledRect {
 
                     StyledText {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Dank Calendar 智能排程助理"
+                        text: "Dank Calendar Plus 智能排程助理"
                         font.pixelSize: Theme.fontSizeMedium
                         font.weight: Font.Bold
                         color: Theme.surfaceText

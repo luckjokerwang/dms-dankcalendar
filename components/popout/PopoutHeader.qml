@@ -27,7 +27,7 @@ Item {
         spacing: 0
 
         StyledText {
-            text: "Dank Calendar"
+            text: "Dank Calendar Plus"
             font.pixelSize: Theme.fontSizeLarge + 2
             font.weight: Font.Bold
             color: titleHover.hovered ? Theme.primary : Theme.surfaceText
