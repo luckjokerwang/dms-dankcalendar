@@ -41,8 +41,9 @@ class DcalClient:
             return res["calendars"]
         return []
 
-    def get_tasks(self) -> List[Dict[str, Any]]:
-        res = self.call("tasks.list")
+    def get_tasks(self, calendar_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        args = [f"calendarId={calendar_id}"] if calendar_id else []
+        res = self.call("tasks.list", *args)
         if isinstance(res, dict) and "tasks" in res:
             return res["tasks"]
         if isinstance(res, list):

@@ -91,12 +91,25 @@ PluginComponent {
         onTriggered: {
             calendarStoreItem.refreshAll();
             taskStoreItem.fetchTasks();
+            taskStoreItem.notifyTasksChanged();
+        }
+    }
+
+    Timer {
+        id: syncFollowupTimer
+        interval: 1200
+        repeat: false
+        onTriggered: {
+            calendarStoreItem.refreshAll();
+            taskStoreItem.fetchTasks();
+            taskStoreItem.notifyTasksChanged();
         }
     }
 
     function refreshAll() {
         calendarStoreItem.refreshAll();
         taskStoreItem.fetchTasks();
+        taskStoreItem.notifyTasksChanged();
         autoRefreshTimer.restart();
     }
 
@@ -435,7 +448,10 @@ PluginComponent {
                         sessionScriptPath: root.sessionScriptPath
                         pasteHelperPath: root.pasteHelperPath
                         providerScriptPath: root.providerScriptPath
-                        onScheduleConfirmed: root.refreshAll()
+                        onScheduleConfirmed: {
+                            root.refreshAll()
+                            syncFollowupTimer.restart()
+                        }
                     }
                 }
             }
@@ -531,7 +547,10 @@ PluginComponent {
                 providerScriptPath: root.providerScriptPath
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
-                onScheduleConfirmed: root.refreshAll()
+                onScheduleConfirmed: {
+                    root.refreshAll()
+                    syncFollowupTimer.restart()
+                }
             }
         }
     }
