@@ -25,9 +25,16 @@ class CalendarItem(TypedDict, total=False):
     holdsEvents: bool
     color: Optional[str]
 
+class TagItem(TypedDict, total=False):
+    name: str
+    color: str
+    icon: Optional[str]
+
 class TaskItem(TypedDict, total=False):
     id: str
     summary: str
+    cleanSummary: Optional[str]
+    tags: Optional[List[TagItem]]
     calendarId: str
     calendarName: str
     status: Literal["needs_action", "completed"]
@@ -36,18 +43,21 @@ class TaskItem(TypedDict, total=False):
     due: Optional[str]
     completed: Optional[Union[bool, str]]
 
-class TasksListResult(TypedDict):
+class TasksListResult(TypedDict, total=False):
     pending: List[TaskItem]
     completed: List[TaskItem]
     pendingCount: int
     completedCount: int
     defaultCalendarId: str
     taskCalendars: List[Dict[str, str]]
+    allTags: Optional[List[TagItem]]
 
 class EventItem(TypedDict, total=False):
     id: str
     uid: Optional[str]
     summary: str
+    cleanSummary: Optional[str]
+    tags: Optional[List[TagItem]]
     start: str
     end: str
     allDay: bool
@@ -58,9 +68,10 @@ class EventItem(TypedDict, total=False):
     recurringId: Optional[str]
     calendarId: Optional[str]
 
-class AgendaResult(TypedDict):
+class AgendaResult(TypedDict, total=False):
     events: List[EventItem]
     count: int
+    allTags: Optional[List[TagItem]]
 
 class NextEventResult(TypedDict, total=False):
     summary: str

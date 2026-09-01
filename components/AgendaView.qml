@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import qs.Common
 import qs.Widgets
@@ -173,14 +174,50 @@ Item {
                                         spacing: 1
                                         anchors.verticalCenter: parent.verticalCenter
 
-                                        StyledText {
+                                        RowLayout {
                                             width: parent.width
-                                            text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.summary || "(untitled)") : ""
-                                            font.pixelSize: Theme.fontSizeSmall
-                                            font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
-                                            color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
-                                            elide: Text.ElideRight
-                                            maximumLineCount: 1
+                                            spacing: 4
+
+                                            StyledText {
+                                                Layout.fillWidth: true
+                                                text: agendaRow.modelData.kind === "event" ? (agendaRow.modelData.ev.cleanSummary || agendaRow.modelData.ev.summary || "(untitled)") : ""
+                                                font.pixelSize: Theme.fontSizeSmall
+                                                font.weight: agendaRow.phase === "past" ? Font.Normal : Font.Medium
+                                                color: agendaRow.phase === "past" ? Theme.surfaceVariantText : Theme.surfaceText
+                                                elide: Text.ElideRight
+                                                maximumLineCount: 1
+                                            }
+
+                                            Repeater {
+                                                model: (agendaRow.modelData.kind === "event" && agendaRow.modelData.ev) ? (agendaRow.modelData.ev.tags || []) : []
+                                                delegate: Rectangle {
+                                                    required property var modelData
+                                                    readonly property string bColor: modelData.color || Theme.primary
+                                                    implicitWidth: evTagRow.implicitWidth + 8
+                                                    implicitHeight: 16
+                                                    radius: 8
+                                                    color: Theme.withAlpha(bColor, 0.15)
+                                                    border.width: 1
+                                                    border.color: Theme.withAlpha(bColor, 0.35)
+
+                                                    RowLayout {
+                                                        id: evTagRow
+                                                        anchors.centerIn: parent
+                                                        spacing: 2
+                                                        DankIcon {
+                                                            name: modelData.icon || "label"
+                                                            size: 9
+                                                            color: bColor
+                                                        }
+                                                        StyledText {
+                                                            text: modelData.name
+                                                            font.pixelSize: 9
+                                                            font.weight: Font.Bold
+                                                            color: bColor
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         StyledText {

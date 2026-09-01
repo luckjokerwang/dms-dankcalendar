@@ -94,7 +94,7 @@ Item {
                 StyledText {
                     id: summaryText
                     width: scrollTitle ? implicitWidth : summaryClip.width
-                    text: (calendarStore && calendarStore.hasEvent) ? calendarStore.eventSummary : "No events"
+                    text: (calendarStore && calendarStore.hasEvent) ? (calendarStore.eventCleanSummary || calendarStore.eventSummary) : "No events"
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceText
                     wrapMode: Text.NoWrap

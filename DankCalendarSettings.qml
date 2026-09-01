@@ -35,6 +35,71 @@ PluginSettings {
     // Realtime Concurrent Model Benchmarking State (Per Model Latency Cache)
     property var modelBenchmarkMap: ({})
 
+    // Tag Store & Management State
+    property var registeredTags: []
+    property string newTagNameInput: ""
+
+    Process {
+        id: loadTagsProc
+        command: [
+            Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
+            "tag", "list"
+        ]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
+                if (!trimmed) return;
+                try {
+                    var res = JSON.parse(trimmed);
+                    if (res.status === "ok" && res.data && res.data.tags) {
+                        root.registeredTags = res.data.tags;
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    Process {
+        id: addTagProc
+        command: []
+        running: false
+        onExited: (code) => {
+            loadTagsProc.running = true;
+        }
+    }
+
+    Process {
+        id: deleteTagProc
+        command: []
+        running: false
+        onExited: (code) => {
+            loadTagsProc.running = true;
+        }
+    }
+
+    function addTag() {
+        var name = root.newTagNameInput.trim().replace(/^#/, "");
+        if (!name) return;
+        addTagProc.command = [
+            Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
+            "tag", "add",
+            "--name", name
+        ];
+        addTagProc.running = true;
+        root.newTagNameInput = "";
+    }
+
+    function deleteTag(tagId) {
+        if (!tagId) return;
+        deleteTagProc.command = [
+            Qt.resolvedUrl("./core/dms-calendar-core").toString().replace(/^file:\/\//, ""),
+            "tag", "delete",
+            "--id", String(tagId)
+        ];
+        deleteTagProc.running = true;
+    }
+
     Component {
         id: benchmarkProcComp
         Process {
@@ -1026,5 +1091,136 @@ PluginSettings {
         minimum: 1
         maximum: 14
         unit: "d"
+    }
+
+    // ==========================================
+    // 3. 🏷️ 常用分类标签库管理 (SQLite)
+    // ==========================================
+    StyledText {
+        text: "🏷️ 常用分类标签管理"
+        font.pixelSize: Theme.fontSizeMedium
+        font.weight: Font.Bold
+        color: Theme.surfaceText
+    }
+
+    StyledText {
+        text: "自定义全局预设标签与主题配色，支持跨端 CalDAV #tag 同步识别与多色彩分类"
+        font.pixelSize: Theme.fontSizeSmall
+        color: Theme.surfaceVariantText
+    }
+
+    Rectangle {
+        width: parent.width
+        implicitHeight: tagCol.implicitHeight + Theme.spacingM * 2
+        radius: Theme.cornerRadius
+        color: Theme.surfaceContainerLowest
+        border.width: 1
+        border.color: Theme.outlineVariant
+
+        Column {
+            id: tagCol
+            width: parent.width - Theme.spacingM * 2
+            x: Theme.spacingM
+            y: Theme.spacingM
+            spacing: Theme.spacingM
+
+            // Existing Tags Flow
+            Flow {
+                width: parent.width
+                spacing: 8
+
+                Repeater {
+                    model: root.registeredTags
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property string tagColor: modelData.color || Theme.primary
+
+                        implicitWidth: tChipRow.implicitWidth + 12
+                        implicitHeight: 28
+                        radius: 14
+                        color: Theme.withAlpha(tagColor, 0.12)
+                        border.width: 1
+                        border.color: Theme.withAlpha(tagColor, 0.4)
+
+                        RowLayout {
+                            id: tChipRow
+                            anchors.centerIn: parent
+                            spacing: 4
+
+                            DankIcon {
+                                name: modelData.icon || "label"
+                                size: 14
+                                color: tagColor
+                            }
+
+                            StyledText {
+                                text: "#" + modelData.name
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                color: tagColor
+                            }
+
+                            // Delete button
+                            Rectangle {
+                                implicitWidth: 16
+                                implicitHeight: 16
+                                radius: 8
+                                color: delTagMouse.containsMouse ? Theme.withAlpha(Theme.error, 0.2) : "transparent"
+
+                                DankIcon {
+                                    anchors.centerIn: parent
+                                    name: "close"
+                                    size: 11
+                                    color: delTagMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
+                                }
+
+                                MouseArea {
+                                    id: delTagMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.deleteTag(modelData.id)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add Tag Input Row
+            RowLayout {
+                width: parent.width
+                spacing: Theme.spacingS
+
+                DankTextField {
+                    Layout.fillWidth: true
+                    text: root.newTagNameInput
+                    placeholderText: "添加新分类标签 (如: 运动 / 读书 / 会议)..."
+                    onTextChanged: root.newTagNameInput = text
+                    Keys.onReturnPressed: root.addTag()
+                }
+
+                Rectangle {
+                    implicitWidth: 80
+                    implicitHeight: 32
+                    radius: 6
+                    color: Theme.primary
+
+                    StyledText {
+                        anchors.centerIn: parent
+                        text: "添加标签"
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        color: "#ffffff"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.addTag()
+                    }
+                }
+            }
+        }
     }
 }

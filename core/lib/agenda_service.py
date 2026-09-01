@@ -8,6 +8,8 @@ from typing import Dict, Any, List, Optional
 from .dcal_client import DcalClient
 from .types import EventItem, NextEventResult
 
+from .tag_service import TagService
+
 class AgendaService:
     def __init__(self, dcal: Optional[DcalClient] = None):
         self.dcal = dcal or DcalClient()
@@ -20,7 +22,14 @@ class AgendaService:
         from_iso = start_local.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         to_iso = end_local.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        return self.dcal.get_events(from_iso, to_iso)
+        events = self.dcal.get_events(from_iso, to_iso)
+        tag_map = TagService.get_tag_map()
+        for ev in events:
+            raw_summary = ev.get("summary") or ""
+            clean_sum, tags = TagService.parse_tags_detail(raw_summary, tag_map=tag_map)
+            ev["cleanSummary"] = clean_sum
+            ev["tags"] = tags
+        return events
 
     def get_next_event(self, look_ahead_days: int = 1, now_window_mins: int = 5) -> Optional[NextEventResult]:
         now_local = datetime.datetime.now().astimezone()
@@ -57,16 +66,20 @@ class AgendaService:
             st = parse_start(ev)
             if not st:
                 continue
-            # Check if event is still relevant (ends after now or starts after now)
             valid_events.append((st, ev))
 
         valid_events.sort(key=lambda x: x[0])
         now_clean = now_local.replace(microsecond=0, tzinfo=None)
+        tag_map = TagService.get_tag_map()
 
         for st, ev in valid_events:
+            raw_summary = ev.get("summary") or ""
+            clean_sum, tags = TagService.parse_tags_detail(raw_summary, tag_map=tag_map)
             if st >= now_clean:
                 return {
-                    "summary": ev.get("summary") or "",
+                    "summary": raw_summary,
+                    "cleanSummary": clean_sum,
+                    "tags": tags,
                     "start": ev.get("start") or "",
                     "end": ev.get("end") or "",
                     "allDay": bool(ev.get("allDay", False)),
@@ -78,7 +91,9 @@ class AgendaService:
             # Or currently happening
             if now_window_mins > 0 and (now_clean - st).total_seconds() <= (now_window_mins * 60):
                 return {
-                    "summary": ev.get("summary") or "",
+                    "summary": raw_summary,
+                    "cleanSummary": clean_sum,
+                    "tags": tags,
                     "start": ev.get("start") or "",
                     "end": ev.get("end") or "",
                     "allDay": bool(ev.get("allDay", False)),

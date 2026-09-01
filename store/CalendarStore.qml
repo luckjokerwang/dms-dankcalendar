@@ -17,6 +17,8 @@ Item {
 
     // State
     property string eventSummary: ""
+    property string eventCleanSummary: ""
+    property var eventTags: []
     property string eventStart: ""
     property string eventEnd: ""
     property bool eventAllDay: false
@@ -181,6 +183,8 @@ Item {
 
     function applyEventPayload(payload) {
         eventSummary = payload.summary || "";
+        eventCleanSummary = payload.cleanSummary || payload.summary || "";
+        eventTags = payload.tags || [];
         eventStart = payload.start || "";
         eventEnd = payload.end || "";
         eventAllDay = payload.allDay === true;

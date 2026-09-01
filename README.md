@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.2.0-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.0-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 

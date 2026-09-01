@@ -79,6 +79,17 @@ class DcalClient:
                 pass
         return res is not None
 
+    def update_task(self, task_id: str, summary: Optional[str] = None, priority: Optional[int] = None, due: Optional[str] = None) -> bool:
+        args = [f"id={task_id}"]
+        if summary is not None:
+            args.append(f"summary={summary}")
+        if priority is not None:
+            args.append(f"priority={priority}")
+        if due is not None:
+            args.append(f"due={due}")
+        res = self.call("tasks.update", *args)
+        return res is not None
+
     def complete_task(self, task_id: str, completed: bool = True) -> bool:
         val = "true" if completed else "false"
         res = self.call("tasks.complete", f"id={task_id}", f"completed={val}")

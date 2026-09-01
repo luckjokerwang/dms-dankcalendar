@@ -20,6 +20,7 @@ from lib.provider_service import ProviderService, PRESET_PROVIDERS
 from lib.session_service import SessionService
 from lib.ai_service import AiService
 from lib.paste_service import PasteService
+from lib.tag_service import TagService
 
 def make_ok(data=None, code=200):
     return {
@@ -56,8 +57,13 @@ def handle_tasks(args):
         res = service.get_tasks_summary()
         print(json.dumps(res, ensure_ascii=False))
     elif args.action == "create":
-        ok = service.dcal.create_task(args.calendar_id, args.summary, args.priority, args.due)
-        print(json.dumps(make_ok({"created": ok}) if ok else make_err("Failed to create task")))
+        summary = args.summary or ""
+        if args.auto_classify and not TagService.extract_tags(summary):
+            c_res = service.classify_task(summary, model_override=args.model)
+            if c_res and c_res.get("taggedSummary"):
+                summary = c_res["taggedSummary"]
+        ok = service.dcal.create_task(args.calendar_id, summary, args.priority, args.due)
+        print(json.dumps(make_ok({"created": ok, "summary": summary}) if ok else make_err("Failed to create task")))
     elif args.action == "complete":
         ok = service.dcal.complete_task(args.id, args.completed)
         print(json.dumps(make_ok({"completed": ok}) if ok else make_err("Failed to complete task")))
@@ -71,6 +77,28 @@ def handle_tasks(args):
             print(json.dumps(make_ok(res) if res.get("success") else make_err("Batch create failed", details=str(res.get("errors")))))
         except Exception as e:
             print(json.dumps(make_err(f"Invalid batch payload: {e}")))
+    elif args.action == "classify":
+        text = args.text or args.summary or ""
+        res = service.classify_task(text, model_override=args.model)
+        print(json.dumps(make_ok(res), ensure_ascii=False))
+    elif args.action == "classify-batch":
+        try:
+            tasks_list = json.loads(args.payload) if args.payload else None
+            res = service.classify_unclassified_tasks(
+                tasks_list=tasks_list,
+                model_override=args.model,
+                include_completed=args.include_completed
+            )
+            print(json.dumps(make_ok({"tasks": res}), ensure_ascii=False))
+        except Exception as e:
+            print(json.dumps(make_err(f"Classify batch failed: {e}")))
+    elif args.action == "apply-tags":
+        try:
+            updates = json.loads(args.payload) if args.payload else []
+            res = service.apply_tags_updates(updates)
+            print(json.dumps(make_ok(res) if res.get("success") else make_err("Apply tags failed", details=str(res.get("errors")))))
+        except Exception as e:
+            print(json.dumps(make_err(f"Apply tags failed: {e}")))
 
 def handle_provider(args):
     if args.action == "list":
@@ -152,6 +180,23 @@ def handle_paste(args):
     else:
         sys.exit(1)
 
+def handle_tag(args):
+    if args.action == "list":
+        tags = TagService.list_tags()
+        print(json.dumps(make_ok({"tags": tags}), ensure_ascii=False))
+    elif args.action == "add":
+        ok = TagService.add_tag(args.name, color=args.color, icon=args.icon)
+        print(json.dumps(make_ok({"added": ok}) if ok else make_err("Failed to add tag")))
+    elif args.action == "update":
+        ok = TagService.update_tag(int(args.id), name=args.name, color=args.color, icon=args.icon)
+        print(json.dumps(make_ok({"updated": ok}) if ok else make_err("Failed to update tag")))
+    elif args.action == "delete":
+        ok = TagService.delete_tag(args.id or args.name)
+        print(json.dumps(make_ok({"deleted": ok}) if ok else make_err("Failed to delete tag")))
+    elif args.action == "parse":
+        clean, tags = TagService.parse_tags_detail(args.text or "")
+        print(json.dumps(make_ok({"cleanText": clean, "tags": tags}), ensure_ascii=False))
+
 def main():
     parser = argparse.ArgumentParser(description="Dank Calendar Plus Core CLI")
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
@@ -167,13 +212,17 @@ def main():
 
     # Tasks subparser
     p_tasks = subparsers.add_parser("tasks")
-    p_tasks.add_argument("action", choices=["list", "create", "complete", "delete", "batch-create"])
+    p_tasks.add_argument("action", choices=["list", "create", "complete", "delete", "batch-create", "classify", "classify-batch", "apply-tags"])
     p_tasks.add_argument("--calendar-id", default="")
     p_tasks.add_argument("--summary", default="")
+    p_tasks.add_argument("--text", default="")
     p_tasks.add_argument("--priority", type=int, default=0)
     p_tasks.add_argument("--due", default=None)
     p_tasks.add_argument("--id", default="")
     p_tasks.add_argument("--completed", type=lambda v: v.lower() == "true", default=True)
+    p_tasks.add_argument("--include-completed", action="store_true", default=False)
+    p_tasks.add_argument("--auto-classify", action="store_true", default=False)
+    p_tasks.add_argument("--model", default=None)
     p_tasks.add_argument("--payload", default="")
     p_tasks.set_defaults(func=handle_tasks)
 
@@ -206,6 +255,16 @@ def main():
     # Paste subparser
     p_paste = subparsers.add_parser("paste")
     p_paste.set_defaults(func=handle_paste)
+
+    # Tag subparser
+    p_tag = subparsers.add_parser("tag")
+    p_tag.add_argument("action", choices=["list", "add", "update", "delete", "parse"])
+    p_tag.add_argument("--id", default="")
+    p_tag.add_argument("--name", default="")
+    p_tag.add_argument("--color", default=None)
+    p_tag.add_argument("--icon", default=None)
+    p_tag.add_argument("--text", default="")
+    p_tag.set_defaults(func=handle_tag)
 
     args = parser.parse_args()
     args.func(args)

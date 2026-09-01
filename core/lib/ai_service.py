@@ -16,6 +16,7 @@ import urllib.error
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from .provider_service import ProviderService
+from .tag_service import TagService
 
 DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能日历与待办排程专家 (Dank Calendar Plus AI Assistant)。
 你的核心使命是帮助用户从杂乱的文字、笔记或图片中分析需求，主动追问缺失细节，并制作最科学的日程 (Event) 与待办 (Task) 规划。
@@ -24,6 +25,10 @@ DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能�
 1. 📅 日程 (Event)：具有明确的起止时间段（如 14:00-15:30）、强时间独占性、需与他人协同（如会议、约会、就医门诊、课程表、航班火车）。
 2. 📋 待办 (Task)：结果导向、关注是否完成、利用碎片时间处理、带截止日期（Due Date）与优先级（如 买牛奶、交周报、阅读章节）。
 3. 🔄 复合拆解：当用户提出复杂目标时，合理拆解为“准备待办 (Task)”与“执行日程 (Event)”。
+
+【智能分类标签规则 (#tag)】：
+- 为所有生成的日程 (events) 和待办 (tasks) 标题末尾添加合适的主题分类标签（如 #学习, #工作, #生活, #项目, #健康, #娱乐 或自定义标签如 #英语, #会议 等）；
+- 例如日程标题：`📚 每日阅读：《原子习惯》 #学习`；待办标题：`整理第一章读书笔记 #学习`、`买牛奶与鸡蛋 #生活`。
 
 【日期与截止时间严格对齐规则（极度重要）】：
 - 待办 (Task) 的截止日期 `due` 必须与该事件发生的具体日期完全一致！
@@ -38,7 +43,7 @@ DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能�
   "explanation": "简短的一句话排程说明",
   "events": [
     {
-      "title": "📚 每日阅读：《原子习惯》",
+      "title": "📚 每日阅读：《原子习惯》 #学习",
       "start": "YYYY-MM-DDTHH:MM:SS",
       "end": "YYYY-MM-DDTHH:MM:SS",
       "calendarName": "默认日历"
@@ -46,7 +51,7 @@ DEFAULT_SYSTEM_PROMPT = """你是一个内嵌在 Linux 桌面顶栏中的智能�
   ],
   "tasks": [
     {
-      "summary": "整理第一章读书笔记",
+      "summary": "整理第一章读书笔记 #学习",
       "due": "YYYY-MM-DD",
       "priority": 1,
       "calendarName": "默认任务"
@@ -101,7 +106,9 @@ class AiService:
     ):
         base_url, api_key, model_name = cls.resolve_provider_and_model(model_override)
         time_str = cls.get_current_time_str()
-        sys_prompt = (custom_system_prompt or DEFAULT_SYSTEM_PROMPT) + f"\n\n【当前系统真实时间】：{time_str}\n请所有排程与计算均以此时间为基准。"
+        existing_tags = TagService.list_tags()
+        tag_list_str = ", ".join(f"#{t['name']}" for t in existing_tags)
+        sys_prompt = (custom_system_prompt or DEFAULT_SYSTEM_PROMPT) + f"\n\n【当前系统真实时间】：{time_str}\n【当前系统常用分类标签库】：{tag_list_str}\n请所有排程与计算均以此时间为基准，并优先复用或合理补充主题分类标签。"
 
         formatted_messages = [{"role": "system", "content": sys_prompt}]
         for m in messages:

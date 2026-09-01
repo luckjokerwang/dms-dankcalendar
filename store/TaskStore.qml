@@ -15,7 +15,9 @@ Item {
     property int completedTasksCount: 0
     property string defaultTaskCalendarId: ""
     property var taskCalendars: []
+    property var allTags: []
     property bool tasksLoading: false
+    property bool isClassifyingBatch: false
 
     // Action Queue for robust sequential writes
     property var taskActionQueue: []
@@ -38,6 +40,7 @@ Item {
                         store.completedTasksCount = res.completedCount || 0;
                         store.defaultTaskCalendarId = res.defaultCalendarId || "";
                         store.taskCalendars = res.taskCalendars || [];
+                        store.allTags = res.allTags || [];
                     }
                 } catch (e) {
                     console.warn("[TaskStore] parse error:", e);
@@ -64,11 +67,64 @@ Item {
         }
     }
 
+    Process {
+        id: classifyBatchProc
+        command: [constants.coreScriptPath, "tasks", "classify-batch"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
+                store.isClassifyingBatch = false;
+                if (!trimmed) return;
+                try {
+                    var res = JSON.parse(trimmed);
+                    if (res && res.status === "ok" && res.data && res.data.tasks && res.data.tasks.length > 0) {
+                        var updates = [];
+                        for (var i = 0; i < res.data.tasks.length; i++) {
+                            var t = res.data.tasks[i];
+                            updates.push({ id: t.id, taggedSummary: t.taggedSummary });
+                        }
+                        store.applyBatchTags(updates);
+                    }
+                } catch (e) {
+                    console.warn("[TaskStore] classify batch error:", e);
+                }
+            }
+        }
+        onExited: (code) => {
+            store.isClassifyingBatch = false;
+        }
+    }
+
+    Process {
+        id: applyBatchTagsProc
+        command: []
+        running: false
+        onExited: (code) => {
+            store.fetchTasks();
+        }
+    }
+
     function fetchTasks() {
         if (!fetchTasksProc.running) {
             store.tasksLoading = true;
             fetchTasksProc.running = true;
         }
+    }
+
+    function autoClassifyUncategorizedTasks() {
+        if (isClassifyingBatch) return;
+        isClassifyingBatch = true;
+        classifyBatchProc.running = true;
+    }
+
+    function applyBatchTags(updates) {
+        if (!updates || updates.length === 0) return;
+        applyBatchTagsProc.command = [
+            constants.coreScriptPath, "tasks", "apply-tags",
+            "--payload", JSON.stringify(updates)
+        ];
+        applyBatchTagsProc.running = true;
     }
 
     function processNextTaskAction() {
@@ -117,6 +173,8 @@ Item {
         var tempTask = {
             id: "temp-" + Date.now(),
             summary: cleanSummary,
+            cleanSummary: cleanSummary,
+            tags: [],
             calendarId: cid,
             calendarName: calName,
             status: "needs_action",
@@ -128,7 +186,7 @@ Item {
         pendingTasks = newPending;
         pendingTasksCount = newPending.length;
 
-        var cmdArgs = [constants.coreScriptPath, "tasks", "create", "--calendar-id", cid, "--summary", cleanSummary];
+        var cmdArgs = [constants.coreScriptPath, "tasks", "create", "--calendar-id", cid, "--summary", cleanSummary, "--auto-classify"];
         if (priorityVal > 0) {
             cmdArgs.push("--priority");
             cmdArgs.push(String(priorityVal));
