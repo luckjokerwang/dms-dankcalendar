@@ -41,7 +41,9 @@ class TaskItem(TypedDict, total=False):
     percentComplete: int
     priority: int  # 0: None, 1: High, 5: Med, 9: Low
     due: Optional[str]
+    allDay: Optional[bool]
     completed: Optional[Union[bool, str]]
+    created: Optional[str]
 
 class TasksListResult(TypedDict, total=False):
     pending: List[TaskItem]

@@ -85,6 +85,7 @@ class TaskService:
                     "percentComplete": t.get("percentComplete", 0),
                     "priority": t.get("priority", 0),
                     "due": t.get("due"),
+                    "allDay": bool(t.get("allDay", False)),
                     "created": created_val
                 }
 
@@ -95,6 +96,22 @@ class TaskService:
                     for tg in tags:
                         tag_name = tg["name"]
                         tag_counts[tag_name] = tag_counts.get(tag_name, 0) + 1
+
+        # Smart prioritization: Tasks with due dates first (by due time ascending), then priority, then created
+        def _task_sort_key(task: TaskItem) -> Tuple[int, float, int, str]:
+            due_str = task.get("due")
+            priority = task.get("priority", 0)
+            created = task.get("created") or ""
+            p_rank = 1 if priority == 1 else (2 if priority == 2 else (4 if priority == 3 else 3))
+            if due_str:
+                try:
+                    dt = datetime.datetime.fromisoformat(due_str.replace("Z", "+00:00"))
+                    return (0, dt.timestamp(), p_rank, created)
+                except Exception:
+                    return (0, 0.0, p_rank, created)
+            return (1, 0.0, p_rank, created)
+
+        pending_tasks.sort(key=_task_sort_key)
 
         active_tags = []
         t_map = TagService.get_tag_map()

@@ -32,12 +32,23 @@ Item {
         return count;
     }
 
+    readonly property int dueTasksCount: {
+        var all = (activeStore && activeStore.pendingTasks) ? activeStore.pendingTasks : [];
+        var count = 0;
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].due) count++;
+        }
+        return count;
+    }
+
     readonly property var filteredPendingTasks: {
         var all = (activeStore && activeStore.pendingTasks) ? activeStore.pendingTasks : [];
         if (filterCalendarId) {
             all = all.filter(t => t.calendarId === filterCalendarId);
         }
-        if (filterTag) {
+        if (filterTag === "__due__") {
+            all = all.filter(t => !!t.due);
+        } else if (filterTag) {
             all = all.filter(t => {
                 var tags = t.tags || [];
                 for (var i = 0; i < tags.length; i++) {
@@ -46,7 +57,25 @@ Item {
                 return false;
             });
         }
-        return all;
+        var sorted = all.slice();
+        sorted.sort(function(a, b) {
+            var aDue = a.due;
+            var bDue = b.due;
+            if (aDue && !bDue) return -1;
+            if (!aDue && bDue) return 1;
+            if (aDue && bDue) {
+                var aTime = new Date(aDue).getTime() || 0;
+                var bTime = new Date(bDue).getTime() || 0;
+                if (aTime !== bTime) return aTime - bTime;
+            }
+            var aP = a.priority || 0;
+            var bP = b.priority || 0;
+            var aRank = (aP === 1 ? 1 : (aP === 2 ? 2 : (aP === 3 ? 4 : 3)));
+            var bRank = (bP === 1 ? 1 : (bP === 2 ? 2 : (bP === 3 ? 4 : 3)));
+            if (aRank !== bRank) return aRank - bRank;
+            return 0;
+        });
+        return sorted;
     }
 
     readonly property var filteredCompletedTasks: {
@@ -54,7 +83,9 @@ Item {
         if (filterCalendarId) {
             all = all.filter(t => t.calendarId === filterCalendarId);
         }
-        if (filterTag) {
+        if (filterTag === "__due__") {
+            all = all.filter(t => !!t.due);
+        } else if (filterTag) {
             all = all.filter(t => {
                 var tags = t.tags || [];
                 for (var i = 0; i < tags.length; i++) {
@@ -67,7 +98,7 @@ Item {
     }
 
     function checkFilterTagValidity() {
-        if (!filterTag) return;
+        if (!filterTag || filterTag === "__due__") return;
         var tags = (activeStore && activeStore.allTags) ? activeStore.allTags : [];
         var found = false;
         for (var i = 0; i < tags.length; i++) {
@@ -77,6 +108,96 @@ Item {
             }
         }
         if (!found) filterTag = "";
+    }
+
+    function formatTaskDue(dueStr, allDay, summary) {
+        if (!dueStr) return "";
+        try {
+            var d = new Date(dueStr);
+            if (isNaN(d.getTime())) return dueStr;
+
+            var isAllDay = (allDay === true) || dueStr.endsWith("T00:00:00Z") || dueStr.indexOf("T00:00:00") !== -1;
+            
+            var now = new Date();
+            var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            var targetDay;
+            if (isAllDay) {
+                targetDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+            } else {
+                targetDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            }
+
+            var diffMs = targetDay.getTime() - today.getTime();
+            var diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+            var datePrefix = "";
+            if (diffDays === 0) {
+                datePrefix = "今天";
+            } else if (diffDays === 1) {
+                datePrefix = "明天";
+            } else if (diffDays === 2) {
+                datePrefix = "后天";
+            } else if (diffDays === -1) {
+                datePrefix = "昨天 (已逾期)";
+            } else if (diffDays < -1) {
+                datePrefix = "已逾期 (" + Qt.formatDate(targetDay, "M月d日") + ")";
+            } else if (targetDay.getFullYear() === now.getFullYear()) {
+                datePrefix = Qt.formatDate(targetDay, "M月d日");
+            } else {
+                datePrefix = Qt.formatDate(targetDay, "yyyy年M月d日");
+            }
+
+            var timePart = "";
+            if (!isAllDay) {
+                timePart = " " + Qt.formatTime(d, "HH:mm");
+            } else if (summary) {
+                var tm = summary.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+                if (tm) {
+                    timePart = " " + tm[0];
+                }
+            }
+
+            return datePrefix + timePart;
+        } catch (e) {
+            return dueStr;
+        }
+    }
+
+    function isTaskOverdue(dueStr, allDay) {
+        if (!dueStr) return false;
+        try {
+            var d = new Date(dueStr);
+            if (isNaN(d.getTime())) return false;
+            var isAllDay = (allDay === true) || dueStr.endsWith("T00:00:00Z") || dueStr.indexOf("T00:00:00") !== -1;
+            var now = new Date();
+            if (isAllDay) {
+                var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                var targetDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+                return targetDay.getTime() < today.getTime();
+            } else {
+                return d.getTime() < now.getTime();
+            }
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function getDueColor(dueStr, allDay) {
+        if (!dueStr) return Theme.surfaceVariantText;
+        if (isTaskOverdue(dueStr, allDay)) {
+            return "#ef4444";
+        }
+        var d = new Date(dueStr);
+        if (isNaN(d.getTime())) return Theme.surfaceVariantText;
+        var isAllDay = (allDay === true) || dueStr.endsWith("T00:00:00Z") || dueStr.indexOf("T00:00:00") !== -1;
+        var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var targetDay = isAllDay ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (targetDay.getTime() === today.getTime()) {
+            return "#f59e0b";
+        }
+        return Theme.primary;
     }
 
     Connections {
@@ -250,7 +371,7 @@ Item {
 
             // 3. Category #Tag Filter Tab Pills (Only active tags with tasks)
             Flow {
-                visible: (activeStore && activeStore.allTags && activeStore.allTags.length > 0)
+                visible: (activeStore && ((activeStore.allTags && activeStore.allTags.length > 0) || tasksView.dueTasksCount > 0))
                 width: parent.width
                 spacing: 6
 
@@ -277,6 +398,50 @@ Item {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: tasksView.filterTag = ""
+                    }
+                }
+
+                // "📅 有截止" Smart Tag Pill
+                Rectangle {
+                    visible: tasksView.dueTasksCount > 0
+                    id: dueTagPill
+                    height: 24
+                    implicitWidth: dueTagRow.implicitWidth + 14
+                    radius: 12
+                    readonly property bool isSelected: tasksView.filterTag === "__due__"
+                    color: isSelected ? "#e11d48" : Theme.withAlpha("#e11d48", 0.12)
+                    border.width: 1
+                    border.color: isSelected ? "#e11d48" : Theme.withAlpha("#e11d48", 0.4)
+
+                    RowLayout {
+                        id: dueTagRow
+                        anchors.centerIn: parent
+                        spacing: 3
+
+                        DankIcon {
+                            name: "event_upcoming"
+                            size: 12
+                            color: dueTagPill.isSelected ? "#ffffff" : "#e11d48"
+                        }
+
+                        StyledText {
+                            text: "到期 (" + tasksView.dueTasksCount + ")"
+                            font.pixelSize: 11
+                            font.weight: dueTagPill.isSelected ? Font.Bold : Font.Normal
+                            color: dueTagPill.isSelected ? "#ffffff" : Theme.surfaceText
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (tasksView.filterTag === "__due__") {
+                                tasksView.filterTag = "";
+                            } else {
+                                tasksView.filterTag = "__due__";
+                            }
+                        }
                     }
                 }
 
@@ -469,11 +634,22 @@ Item {
                                         color: Theme.surfaceVariantText
                                     }
 
-                                    StyledText {
+                                    RowLayout {
                                         visible: !!pendingRow.modelData.due
-                                        text: "📅 " + (pendingRow.modelData.due || "")
-                                        font.pixelSize: Theme.fontSizeSmall - 2
-                                        color: Theme.primary
+                                        spacing: 2
+
+                                        DankIcon {
+                                            name: tasksView.isTaskOverdue(pendingRow.modelData.due, pendingRow.modelData.allDay) ? "error" : "calendar_today"
+                                            size: 11
+                                            color: tasksView.getDueColor(pendingRow.modelData.due, pendingRow.modelData.allDay)
+                                        }
+
+                                        StyledText {
+                                            text: tasksView.formatTaskDue(pendingRow.modelData.due, pendingRow.modelData.allDay, pendingRow.modelData.cleanSummary || pendingRow.modelData.summary)
+                                            font.pixelSize: Theme.fontSizeSmall - 2
+                                            font.weight: Font.Medium
+                                            color: tasksView.getDueColor(pendingRow.modelData.due, pendingRow.modelData.allDay)
+                                        }
                                     }
 
                                     Repeater {
@@ -669,11 +845,33 @@ Item {
                                         wrapMode: Text.Wrap
                                     }
 
-                                    // Category Tag Badges
+                                    // Meta Row: Calendar Name, Due Date, and Category Tag Badges
                                     Flow {
-                                        visible: (completedRow.modelData.tags && completedRow.modelData.tags.length > 0)
                                         width: parent.width
-                                        spacing: 4
+                                        spacing: Theme.spacingS
+
+                                        StyledText {
+                                            text: completedRow.modelData.calendarName || "Tasks"
+                                            font.pixelSize: Theme.fontSizeSmall - 2
+                                            color: Theme.surfaceVariantText
+                                        }
+
+                                        RowLayout {
+                                            visible: !!completedRow.modelData.due
+                                            spacing: 2
+
+                                            DankIcon {
+                                                name: "calendar_today"
+                                                size: 10
+                                                color: Theme.surfaceVariantText
+                                            }
+
+                                            StyledText {
+                                                text: tasksView.formatTaskDue(completedRow.modelData.due, completedRow.modelData.allDay, completedRow.modelData.cleanSummary || completedRow.modelData.summary)
+                                                font.pixelSize: Theme.fontSizeSmall - 2
+                                                color: Theme.surfaceVariantText
+                                            }
+                                        }
 
                                         Repeater {
                                             model: completedRow.modelData.tags || []
