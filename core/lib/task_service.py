@@ -213,11 +213,25 @@ class TaskService:
     def classify_task(self, text: str, model_override: Optional[str] = None) -> Dict[str, Any]:
         return TaskClassifier.classify_single(text, model_override=model_override)
 
-    def classify_unclassified_tasks(self, model_override: Optional[str] = None) -> Dict[str, Any]:
-        summary = self.get_tasks_summary()
-        pending = summary.get("pending", [])
-        unclassified = [t for t in pending if not t.get("tags")]
-        return TaskClassifier.classify_batch(unclassified, model_override=model_override)
+    def classify_unclassified_tasks(
+        self,
+        tasks_list: Optional[List[Dict[str, Any]]] = None,
+        model_override: Optional[str] = None,
+        include_completed: bool = False
+    ) -> List[Dict[str, Any]]:
+        if tasks_list is not None:
+            tasks_to_classify = [t for t in tasks_list if not t.get("tags")]
+        else:
+            summary = self.get_tasks_summary()
+            pool = summary.get("pending", [])
+            if include_completed:
+                pool = pool + summary.get("completed", [])
+            tasks_to_classify = [t for t in pool if not t.get("tags")]
+        
+        if not tasks_to_classify:
+            return []
+            
+        return TaskClassifier.classify_batch(tasks_to_classify, model_override=model_override)
 
     def apply_tags_updates(self, updates: List[Dict[str, str]]) -> Dict[str, Any]:
         success_count = 0
@@ -233,6 +247,7 @@ class TaskService:
             else:
                 fail_count += 1
         return {
+            "success": fail_count == 0,
             "successCount": success_count,
             "failCount": fail_count,
             "total": len(updates)
