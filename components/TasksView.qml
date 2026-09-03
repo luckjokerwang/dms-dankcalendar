@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import qs.Common
+import qs.Services
 import qs.Widgets
 import "../store"
 
@@ -13,6 +14,16 @@ Item {
     readonly property TaskStore activeStore: taskStore || (rootWidget ? rootWidget.taskStore : null)
 
     signal closeRequested()
+
+    function copyToClipboard(txt) {
+        if (!txt) return;
+        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy 2>/dev/null || printf '%s' \"$1\" | xclip -selection clipboard 2>/dev/null", "sh", txt]);
+        try {
+            ToastService.showInfo("已复制待办到剪贴板");
+        } catch (e) {
+            console.log("[TasksView] Copied to clipboard:", txt);
+        }
+    }
 
     readonly property real maxListHeight: 420
     implicitWidth: parent ? parent.width : 420
@@ -544,7 +555,7 @@ Item {
                             id: rowHover
                         }
 
-                        Row {
+                        RowLayout {
                             id: rowContent
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -555,11 +566,11 @@ Item {
 
                             // Complete Checkbox Button
                             Rectangle {
-                                width: 28
-                                height: 28
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
                                 radius: 14
                                 color: checkMouse.containsMouse ? Theme.withAlpha(Theme.primary, 0.15) : "transparent"
-                                anchors.verticalCenter: parent.verticalCenter
+                                Layout.alignment: Qt.AlignVCenter
 
                                 DankIcon {
                                     name: checkMouse.containsMouse ? "check_circle" : "radio_button_unchecked"
@@ -581,20 +592,20 @@ Item {
                             }
 
                             // Task Text & Meta Details
-                            Column {
-                                width: parent.width - 28 - 28 - Theme.spacingS * 2
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 2
-                                anchors.verticalCenter: parent.verticalCenter
 
-                                Row {
-                                    width: parent.width
+                                RowLayout {
+                                    Layout.fillWidth: true
                                     spacing: Theme.spacingXS
 
                                     // Priority Indicator Badge
                                     Rectangle {
                                         visible: (pendingRow.modelData.priority >= 1 && pendingRow.modelData.priority <= 9)
-                                        width: 14
-                                        height: 14
+                                        Layout.preferredWidth: 14
+                                        Layout.preferredHeight: 14
                                         radius: 7
                                         color: {
                                             var p = pendingRow.modelData.priority;
@@ -602,7 +613,6 @@ Item {
                                             if (p <= 5) return "#ffa726";
                                             return "#42a5f5";
                                         }
-                                        anchors.verticalCenter: parent.verticalCenter
 
                                         StyledText {
                                             anchors.centerIn: parent
@@ -613,19 +623,27 @@ Item {
                                         }
                                     }
 
-                                    StyledText {
-                                        width: parent.width - 20
+                                    TextEdit {
+                                        Layout.fillWidth: true
                                         text: pendingRow.modelData.cleanSummary || pendingRow.modelData.summary || ""
                                         font.pixelSize: Theme.fontSizeSmall
                                         font.weight: Font.Medium
                                         color: Theme.surfaceText
-                                        wrapMode: Text.Wrap
+                                        wrapMode: TextEdit.Wrap
+                                        readOnly: true
+                                        selectByMouse: true
+                                        selectByKeyboard: true
+                                        cursorVisible: false
+                                        selectionColor: Theme.primary
+                                        selectedTextColor: Theme.primaryText
+                                        activeFocusOnPress: true
+                                        textFormat: TextEdit.PlainText
                                     }
                                 }
 
                                 // Meta Row: Calendar Name, Due Date, and Category Tag Badges
                                 Flow {
-                                    width: parent.width
+                                    Layout.fillWidth: true
                                     spacing: Theme.spacingS
 
                                     StyledText {
@@ -696,30 +714,71 @@ Item {
                                 }
                             }
 
-                            // Delete Task Button (Visible on Hover)
-                            Rectangle {
-                                visible: rowHover.hovered || delMouse.containsMouse
-                                width: 28
-                                height: 28
-                                radius: 14
-                                color: delMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-                                anchors.verticalCenter: parent.verticalCenter
+                            // Action Buttons: Copy & Delete (Visible on Hover)
+                            RowLayout {
+                                visible: rowHover.hovered || copyMouse.containsMouse || delMouse.containsMouse
+                                spacing: 2
+                                Layout.alignment: Qt.AlignVCenter
 
-                                DankIcon {
-                                    name: "delete"
-                                    size: 16
-                                    color: delMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
-                                    anchors.centerIn: parent
+                                // 1. Copy Task Button
+                                Rectangle {
+                                    id: copyBtn
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 26
+                                    radius: 13
+                                    color: copyMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+
+                                    property bool recentlyCopied: false
+                                    Timer {
+                                        id: copyFeedbackTimer
+                                        interval: 1500
+                                        onTriggered: copyBtn.recentlyCopied = false
+                                    }
+
+                                    DankIcon {
+                                        name: copyBtn.recentlyCopied ? "check" : "content_copy"
+                                        size: 14
+                                        color: copyBtn.recentlyCopied ? "#10b981" : (copyMouse.containsMouse ? Theme.primary : Theme.surfaceVariantText)
+                                        anchors.centerIn: parent
+                                    }
+
+                                    MouseArea {
+                                        id: copyMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            var txt = pendingRow.modelData.cleanSummary || pendingRow.modelData.summary || "";
+                                            tasksView.copyToClipboard(txt);
+                                            copyBtn.recentlyCopied = true;
+                                            copyFeedbackTimer.restart();
+                                        }
+                                    }
                                 }
 
-                                MouseArea {
-                                    id: delMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (activeStore)
-                                            activeStore.deleteTask(pendingRow.modelData.id);
+                                // 2. Delete Task Button
+                                Rectangle {
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 26
+                                    radius: 13
+                                    color: delMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+
+                                    DankIcon {
+                                        name: "delete"
+                                        size: 15
+                                        color: delMouse.containsMouse ? Theme.error : Theme.surfaceVariantText
+                                        anchors.centerIn: parent
+                                    }
+
+                                    MouseArea {
+                                        id: delMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (activeStore)
+                                                activeStore.deleteTask(pendingRow.modelData.id);
+                                        }
                                     }
                                 }
                             }
@@ -781,142 +840,189 @@ Item {
                     Repeater {
                         model: tasksView.filteredCompletedTasks
 
-                        delegate: Rectangle {
-                            id: completedRow
-                            required property var modelData
+                    delegate: Rectangle {
+                        id: completedRow
+                        required property var modelData
 
-                            width: parent.width
-                            implicitHeight: Math.max(40, compContent.implicitHeight + Theme.spacingXS * 2)
-                            radius: Theme.cornerRadiusSmall
-                            color: compRowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
-                            opacity: 0.7
+                        width: parent.width
+                        implicitHeight: Math.max(40, compContent.implicitHeight + Theme.spacingS * 2)
+                        radius: Theme.cornerRadiusSmall
+                        color: compRowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
 
-                            HoverHandler {
-                                id: compRowHover
-                            }
+                        HoverHandler {
+                            id: compRowHover
+                        }
 
-                            Row {
-                                id: compContent
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.leftMargin: Theme.spacingS
-                                anchors.rightMargin: Theme.spacingS
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: Theme.spacingS
+                        RowLayout {
+                            id: compContent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Theme.spacingS
+                            anchors.rightMargin: Theme.spacingS
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spacingS
 
-                                // Uncomplete Checkbox Button
-                                Rectangle {
-                                    width: 24
-                                    height: 24
-                                    radius: 12
-                                    color: "transparent"
-                                    anchors.verticalCenter: parent.verticalCenter
+                            // Uncomplete Checkbox Button
+                            Rectangle {
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                radius: 12
+                                color: "transparent"
+                                Layout.alignment: Qt.AlignVCenter
 
-                                    DankIcon {
-                                        name: "check_circle"
-                                        size: 16
-                                        color: uncheckMouse.containsMouse ? Theme.surfaceVariantText : Theme.primary
-                                        anchors.centerIn: parent
-                                    }
-
-                                    MouseArea {
-                                        id: uncheckMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (activeStore)
-                                                activeStore.completeTask(completedRow.modelData.id, false);
-                                        }
-                                    }
+                                DankIcon {
+                                    name: "check_circle"
+                                    size: 16
+                                    color: uncheckMouse.containsMouse ? Theme.surfaceVariantText : Theme.primary
+                                    anchors.centerIn: parent
                                 }
 
-                                Column {
-                                    width: parent.width - 24 - 24 - Theme.spacingS * 2
-                                    spacing: 2
-                                    anchors.verticalCenter: parent.verticalCenter
+                                MouseArea {
+                                    id: uncheckMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (activeStore)
+                                            activeStore.completeTask(completedRow.modelData.id, false);
+                                    }
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 2
+
+                                TextEdit {
+                                    Layout.fillWidth: true
+                                    text: completedRow.modelData.cleanSummary || completedRow.modelData.summary || ""
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.strikeout: true
+                                    color: Theme.surfaceVariantText
+                                    wrapMode: TextEdit.Wrap
+                                    readOnly: true
+                                    selectByMouse: true
+                                    selectByKeyboard: true
+                                    cursorVisible: false
+                                    selectionColor: Theme.primary
+                                    selectedTextColor: Theme.primaryText
+                                    activeFocusOnPress: true
+                                    textFormat: TextEdit.PlainText
+                                }
+
+                                // Meta Row: Calendar Name, Due Date, and Category Tag Badges
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.spacingS
 
                                     StyledText {
-                                        width: parent.width
-                                        text: completedRow.modelData.cleanSummary || completedRow.modelData.summary || ""
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        font.strikeout: true
+                                        text: completedRow.modelData.calendarName || "Tasks"
+                                        font.pixelSize: Theme.fontSizeSmall - 2
                                         color: Theme.surfaceVariantText
-                                        wrapMode: Text.Wrap
                                     }
 
-                                    // Meta Row: Calendar Name, Due Date, and Category Tag Badges
-                                    Flow {
-                                        width: parent.width
-                                        spacing: Theme.spacingS
+                                    RowLayout {
+                                        visible: !!completedRow.modelData.due
+                                        spacing: 2
 
-                                        StyledText {
-                                            text: completedRow.modelData.calendarName || "Tasks"
-                                            font.pixelSize: Theme.fontSizeSmall - 2
+                                        DankIcon {
+                                            name: "calendar_today"
+                                            size: 10
                                             color: Theme.surfaceVariantText
                                         }
 
-                                        RowLayout {
-                                            visible: !!completedRow.modelData.due
-                                            spacing: 2
-
-                                            DankIcon {
-                                                name: "calendar_today"
-                                                size: 10
-                                                color: Theme.surfaceVariantText
-                                            }
-
-                                            StyledText {
-                                                text: tasksView.formatTaskDue(completedRow.modelData.due, completedRow.modelData.allDay, completedRow.modelData.cleanSummary || completedRow.modelData.summary)
-                                                font.pixelSize: Theme.fontSizeSmall - 2
-                                                color: Theme.surfaceVariantText
-                                            }
+                                        StyledText {
+                                            text: tasksView.formatTaskDue(completedRow.modelData.due, completedRow.modelData.allDay, completedRow.modelData.cleanSummary || completedRow.modelData.summary)
+                                            font.pixelSize: Theme.fontSizeSmall - 2
+                                            color: Theme.surfaceVariantText
                                         }
+                                    }
 
-                                        Repeater {
-                                            model: completedRow.modelData.tags || []
-                                            delegate: Rectangle {
-                                                required property var modelData
-                                                readonly property string bColor: modelData.color || Theme.primary
+                                    Repeater {
+                                        model: completedRow.modelData.tags || []
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            readonly property string bColor: modelData.color || Theme.primary
 
-                                                implicitWidth: cTagBadgeRow.implicitWidth + 8
-                                                implicitHeight: 14
-                                                radius: 7
-                                                color: Theme.withAlpha(bColor, 0.1)
-                                                border.width: 1
-                                                border.color: Theme.withAlpha(bColor, 0.25)
+                                            implicitWidth: cTagBadgeRow.implicitWidth + 8
+                                            implicitHeight: 14
+                                            radius: 7
+                                            color: Theme.withAlpha(bColor, 0.1)
+                                            border.width: 1
+                                            border.color: Theme.withAlpha(bColor, 0.25)
 
-                                                RowLayout {
-                                                    id: cTagBadgeRow
-                                                    anchors.centerIn: parent
-                                                    spacing: 2
+                                            RowLayout {
+                                                id: cTagBadgeRow
+                                                anchors.centerIn: parent
+                                                spacing: 2
 
-                                                    DankIcon {
-                                                        name: modelData.icon || "label"
-                                                        size: 8
-                                                        color: bColor
-                                                    }
+                                                DankIcon {
+                                                    name: modelData.icon || "label"
+                                                    size: 8
+                                                    color: bColor
+                                                }
 
-                                                    StyledText {
-                                                        text: modelData.name
-                                                        font.pixelSize: 8
-                                                        font.weight: Font.Bold
-                                                        color: bColor
-                                                    }
+                                                StyledText {
+                                                    text: modelData.name
+                                                    font.pixelSize: 8
+                                                    font.weight: Font.Bold
+                                                    color: bColor
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
 
-                                // Delete Completed Task (Visible on Hover)
+                            // Actions: Copy & Delete Completed Task (Visible on Hover)
+                            RowLayout {
+                                visible: compRowHover.hovered || copyCompMouse.containsMouse || delCompMouse.containsMouse
+                                spacing: 2
+                                Layout.alignment: Qt.AlignVCenter
+
+                                // Copy Completed Task Button
                                 Rectangle {
-                                    visible: compRowHover.hovered || delCompMouse.containsMouse
-                                    width: 24
-                                    height: 24
+                                    id: copyCompBtn
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
+                                    radius: 12
+                                    color: copyCompMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+
+                                    property bool recentlyCopied: false
+                                    Timer {
+                                        id: copyCompFeedbackTimer
+                                        interval: 1500
+                                        onTriggered: copyCompBtn.recentlyCopied = false
+                                    }
+
+                                    DankIcon {
+                                        name: copyCompBtn.recentlyCopied ? "check" : "content_copy"
+                                        size: 13
+                                        color: copyCompBtn.recentlyCopied ? "#10b981" : (copyCompMouse.containsMouse ? Theme.primary : Theme.surfaceVariantText)
+                                        anchors.centerIn: parent
+                                    }
+
+                                    MouseArea {
+                                        id: copyCompMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            var txt = completedRow.modelData.cleanSummary || completedRow.modelData.summary || "";
+                                            tasksView.copyToClipboard(txt);
+                                            copyCompBtn.recentlyCopied = true;
+                                            copyCompFeedbackTimer.restart();
+                                        }
+                                    }
+                                }
+
+                                // Delete Completed Task
+                                Rectangle {
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
                                     radius: 12
                                     color: delCompMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-                                    anchors.verticalCenter: parent.verticalCenter
 
                                     DankIcon {
                                         name: "delete"
@@ -943,4 +1049,5 @@ Item {
             }
         }
     }
+}
 }
