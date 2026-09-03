@@ -267,7 +267,7 @@ Item {
         processNextTaskAction();
     }
 
-    function createTask(summary, calendarId) {
+    function createTask(summary, calendarId, defaultTag) {
         var cid = calendarId || defaultTaskCalendarId || (taskCalendars.length > 0 ? taskCalendars[0].id : "");
         if (!cid) {
             console.warn("[TaskStore] No task calendar available");
@@ -292,11 +292,44 @@ Item {
             cleanSummary = cleanSummary.substring(m[0].length).trim();
         }
 
+        // 如果在特定标签下创建且未手动指定任何 #标签，自动继承该标签（排除到期聚合标签）
+        if (defaultTag && defaultTag !== "__due__") {
+            var hasExplicitTag = /(?:^|\s)#[^\s#]+/.test(cleanSummary);
+            if (!hasExplicitTag) {
+                cleanSummary = cleanSummary + " #" + defaultTag.trim();
+            }
+        }
+
+        // 乐观解析待办标签与洁净标题，确保当前标签视图下即时渲染无闪烁
+        var optTags = [];
+        var tagRegex = /(?:^|\s)#([^\s#]+)/g;
+        var match;
+        while ((match = tagRegex.exec(cleanSummary)) !== null) {
+            var tagName = match[1];
+            if (tagName) {
+                var foundColor = "#0284c7";
+                var foundIcon = "label";
+                for (var ti = 0; ti < store.allTags.length; ti++) {
+                    if (store.allTags[ti].name === tagName) {
+                        foundColor = store.allTags[ti].color || foundColor;
+                        foundIcon = store.allTags[ti].icon || foundIcon;
+                        break;
+                    }
+                }
+                optTags.push({
+                    name: tagName,
+                    color: foundColor,
+                    icon: foundIcon
+                });
+            }
+        }
+        var optCleanText = cleanSummary.replace(/(?:^|\s)#[^\s#]+/g, "").trim();
+
         var tempTask = {
             id: "temp-" + Date.now(),
             summary: cleanSummary,
-            cleanSummary: cleanSummary,
-            tags: [],
+            cleanSummary: optCleanText || cleanSummary,
+            tags: optTags,
             calendarId: cid,
             calendarName: calName,
             status: "needs_action",

@@ -31,6 +31,16 @@ Item {
         }
     }
 
+    function submitNewTask() {
+        if (!taskTextInput) return;
+        var rawText = taskTextInput.text.trim();
+        if (!rawText) return;
+        if (activeStore) {
+            activeStore.createTask(rawText, tasksView.filterCalendarId, tasksView.filterTag);
+        }
+        taskTextInput.text = "";
+    }
+
     readonly property real maxListHeight: 420
     implicitWidth: parent ? parent.width : 420
     implicitHeight: visible ? 420 : 0
@@ -243,19 +253,15 @@ Item {
                 height: 42
                 leftIconName: "add"
                 leftIconSize: 20
-                placeholderText: "添加新待办… (支持 !1 优先级, #标签 分类)"
+                placeholderText: (tasksView.filterTag && tasksView.filterTag !== "__due__")
+                                 ? ("添加新待办至 #" + tasksView.filterTag + "… (可省略 #标签)")
+                                 : "添加新待办… (支持 !1 优先级, #标签 分类)"
                 font.pixelSize: Theme.fontSizeMedium
                 topPadding: 9
                 bottomPadding: 7
                 rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
 
-                onAccepted: {
-                    if (text.trim()) {
-                        if (activeStore)
-                            activeStore.createTask(text.trim(), tasksView.filterCalendarId);
-                        text = "";
-                    }
-                }
+                onAccepted: tasksView.submitNewTask()
 
                 Rectangle {
                     visible: taskTextInput.text.trim().length > 0
@@ -279,13 +285,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (taskTextInput.text.trim()) {
-                                if (activeStore)
-                                    activeStore.createTask(taskTextInput.text.trim(), tasksView.filterCalendarId);
-                                taskTextInput.text = "";
-                            }
-                        }
+                        onClicked: tasksView.submitNewTask()
                     }
                 }
             }

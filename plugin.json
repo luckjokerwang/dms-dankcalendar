@@ -2,7 +2,7 @@
   "id": "dankCalendarPlus",
   "name": "Dank Calendar Plus",
   "description": "Next-event countdown & full tasks manager with AI assistant for dcal: dual-mode bar pill, interactive agenda & tasks popout, intelligent scheduling, priority tagging, and instant synchronization",
-  "version": "3.3.8",
+  "version": "3.3.9",
   "author": "luckjokerwang (based on arqueon / Leonardo Amaro)",
   "icon": "calendar_today",
   "type": "widget",

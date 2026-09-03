@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.8-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.9-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -57,9 +57,11 @@
 
 ### ⚡ 3. 全功能待办清单 (Tasks Management)
 - **0ms 极速乐观 UI (Optimistic Updates)**：勾选、取消、删除、快速添加即时生效，内置 FIFO 串行队列保证并发安全与 SQLite 数据完整。
+- **上下文智能标签继承 (Contextual Tag Inheritance)**：在特定分类标签视图下新建待办无需手动键入 `#标签`，系统自动继承当前选中分类并即刻呈现在列表中；排除虚拟「到期」聚合标签。
+- **AI 智能整理分类与生命周期反馈**：一键利用 AI 对未分类待办进行标签智能推理并批量回写，具备 GPU 加速平滑旋转动效与全局 Toast 状态通知。
 - **DMS 原生输入体验**：快速创建栏采用 DMS 官方原生标准组件 `DankTextField`，像素级保证占位符、输入文字、`+` 图标与右侧提交按钮的**光学中心严丝合缝**。
 - **RFC 5545 优先级与快捷输入**：支持 🔴 高优、🟡 中优、🔵 低优 状态标签，创建时输入 `!1` / `!h`、`!2` / `!m`、`!3` / `!l` 即可快速标记优先级。
-- **多日历分类筛选**：支持按列表/分类标签一键过滤待办任务。
+- **临期待办置顶与智能分类筛选**：支持「到期」聚合视图与各分类标签一键过滤。
 - **顶栏纯数字精简**：顶栏待办模式精简显示为 `[ ✓  7 • 任务标题... ]`，最大限度释放空间展示具体任务文本。
 
 ---
@@ -70,6 +72,7 @@
 - **轮播展示开关**：可开启日程与待办定时自动轮播。
 - **历史与未来跨度**：自定义日程回溯天数与未来预览天数。
 - **模型服务配置**：支持在图形设置界面中完成模型测试、激活切换与参数调整。
+- **Niri / IPC 快捷键配置指南**：设置界面内嵌快捷键配置生成与一键复制。
 
 ---
 
@@ -82,7 +85,11 @@
 | **中键点击顶栏胶囊** | 快速调出 DankCalendar 主应用程序窗口 |
 | **右键点击胶囊 / 点击 ↻** | 触发底层账户全量同步（`dcal ipc accounts.refresh`），带 360° GPU 加速旋转动效 |
 | **弹窗 `+` 按钮** | 在 DankCalendar 中打开新建事件界面 |
-| **待办输入框回车** | 快速创建待办（支持输入 `!1` 设为高优，`!2` 设为中优） |
+| **待办输入框回车** | 快速创建待办（支持输入 `!1` 设为高优，当前分类下自动继承标签） |
+| **弹窗内 `1 / 2 / 3`** | 无文本焦点时秒切【日程】/【待办】/【助理】Tab 页面 |
+| **弹窗内 `Ctrl + N`** | 立即聚焦新建待办输入框并支持输入快捷键创建 |
+| **弹窗内 `Ctrl + R`** | 即刻同步刷新日历与待办数据 |
+| **弹窗内 `Esc`** | 快速关闭主弹窗 |
 | **AI 助理 `Ctrl+V`** | 自动提取并上传剪贴板图片/截图进行 AI 识图排程 |
 | **AI 输入框 `↑ / ↓`** | 快速向上/向下切换回溯历史输入的 Prompt 提示词 |
 
