@@ -39,6 +39,16 @@ PluginSettings {
     property var registeredTags: []
     property string newTagNameInput: ""
 
+    function copyToClipboard(txt, msg) {
+        if (!txt) return;
+        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy 2>/dev/null || printf '%s' \"$1\" | xclip -selection clipboard 2>/dev/null", "sh", txt]);
+        try {
+            ToastService.showInfo(msg || "已复制到剪贴板");
+        } catch (e) {
+            console.log("[Settings] Copied:", txt);
+        }
+    }
+
     Process {
         id: loadTagsProc
         command: [
@@ -1218,6 +1228,251 @@ PluginSettings {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.addTag()
+                    }
+                }
+            }
+        }
+
+        // 4. Keyboard Shortcuts & Wayland Keybind Guide
+        StyledText {
+            text: "⌨️ 快捷键与按键操作指南"
+            font.pixelSize: Theme.fontSizeLarge
+            font.weight: Font.Bold
+            color: Theme.surfaceText
+        }
+
+        StyledText {
+            text: "支持在 Wayland 合成器（如 Niri、Hyprland）中注册全局物理快捷键，以及弹窗展开后的极速纯键盘流操作。"
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.Wrap
+            Layout.fillWidth: true
+        }
+
+        // A. Niri Compositor Keybind Configuration Card
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: niriCardCol.implicitHeight + Theme.spacingM * 2
+            radius: Theme.cornerRadius
+            color: Theme.surfaceContainer
+            border.width: 1
+            border.color: Theme.outlineVariant
+
+            ColumnLayout {
+                id: niriCardCol
+                anchors.fill: parent
+                anchors.margins: Theme.spacingM
+                spacing: Theme.spacingS
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingS
+
+                    DankIcon {
+                        name: "keyboard"
+                        size: 18
+                        color: Theme.primary
+                    }
+
+                    StyledText {
+                        text: "Niri 桌面合成器全局快捷键配置 (~/.config/niri/config.kdl)"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Font.Bold
+                        color: Theme.surfaceText
+                        Layout.fillWidth: true
+                    }
+
+                    Rectangle {
+                        implicitWidth: copyNiriText.implicitWidth + 24
+                        implicitHeight: 28
+                        radius: 14
+                        color: copyNiriMouse.containsMouse ? Theme.primaryHover : Theme.primary
+
+                        property bool copied: false
+                        Timer {
+                            id: niriCopyTimer
+                            interval: 1500
+                            onTriggered: parent.copied = false
+                        }
+
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 4
+
+                            DankIcon {
+                                name: parent.parent.copied ? "check" : "content_copy"
+                                size: 14
+                                color: "#ffffff"
+                            }
+
+                            StyledText {
+                                id: copyNiriText
+                                text: parent.parent.copied ? "已复制" : "复制配置代码"
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                color: "#ffffff"
+                            }
+                        }
+
+                        MouseArea {
+                            id: copyNiriMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                var snippet = '// Dank Calendar Plus 全局快捷键绑定\n' +
+                                              'binds {\n' +
+                                              '    // 开闭主日历/待办面板\n' +
+                                              '    Mod+Alt+C { spawn "dms" "ipc" "call" "dankCalendarPlus" "toggle"; }\n' +
+                                              '    // 直达待办面板\n' +
+                                              '    Mod+Alt+T { spawn "dms" "ipc" "call" "dankCalendarPlus" "openTasks"; }\n' +
+                                              '    // 直达日程议程\n' +
+                                              '    Mod+Alt+A { spawn "dms" "ipc" "call" "dankCalendarPlus" "openAgenda"; }\n' +
+                                              '    // 呼出独立 AI 排程浮窗\n' +
+                                              '    Mod+Alt+I { spawn "dms" "ipc" "call" "dankCalendarPlus" "toggleAI"; }\n' +
+                                              '}\n';
+                                root.copyToClipboard(snippet, "Niri 快捷键配置已复制到剪贴板");
+                                parent.copied = true;
+                                niriCopyTimer.restart();
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: niriCodeEdit.implicitHeight + 16
+                    radius: Theme.cornerRadiusSmall
+                    color: Theme.surfaceContainerHighest
+                    border.width: 1
+                    border.color: Theme.outlineVariant
+
+                    TextEdit {
+                        id: niriCodeEdit
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        readOnly: true
+                        selectByMouse: true
+                        cursorVisible: false
+                        font.family: "Monospace"
+                        font.pixelSize: 11
+                        color: Theme.surfaceText
+                        selectionColor: Theme.primary
+                        selectedTextColor: Theme.primaryText
+                        text: '// 将以下内容添加至 ~/.config/niri/config.kdl 的 binds { ... } 区块中:\n' +
+                              'Mod+Alt+C { spawn "dms" "ipc" "call" "dankCalendarPlus" "toggle"; }     // 开闭主面板\n' +
+                              'Mod+Alt+T { spawn "dms" "ipc" "call" "dankCalendarPlus" "openTasks"; }  // 直达待办\n' +
+                              'Mod+Alt+A { spawn "dms" "ipc" "call" "dankCalendarPlus" "openAgenda"; } // 直达日程\n' +
+                              'Mod+Alt+I { spawn "dms" "ipc" "call" "dankCalendarPlus" "toggleAI"; }   // 呼出 AI 助理'
+                    }
+                }
+            }
+        }
+
+        // B. In-Widget Keyboard Shortcuts Card
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: inWidgetCol.implicitHeight + Theme.spacingM * 2
+            radius: Theme.cornerRadius
+            color: Theme.surfaceContainer
+            border.width: 1
+            border.color: Theme.outlineVariant
+
+            ColumnLayout {
+                id: inWidgetCol
+                anchors.fill: parent
+                anchors.margins: Theme.spacingM
+                spacing: Theme.spacingS
+
+                RowLayout {
+                    spacing: Theme.spacingS
+                    DankIcon {
+                        name: "bolt"
+                        size: 18
+                        color: Theme.primary
+                    }
+                    StyledText {
+                        text: "弹窗内高效快捷键 (聚焦状态下即刻响应)"
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Font.Bold
+                        color: Theme.surfaceText
+                    }
+                }
+
+                GridLayout {
+                    columns: 2
+                    rowSpacing: 8
+                    columnSpacing: Theme.spacingL
+                    Layout.fillWidth: true
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            implicitWidth: escKeyText.implicitWidth + 14
+                            implicitHeight: 22
+                            radius: 4
+                            color: Theme.surfaceContainerHighest
+                            border.width: 1
+                            border.color: Theme.outlineVariant
+                            StyledText { id: escKeyText; text: "Esc"; font.family: "Monospace"; font.pixelSize: 10; font.weight: Font.Bold; anchors.centerIn: parent }
+                        }
+                        StyledText { text: "快速关闭主弹窗"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    }
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            implicitWidth: nKeyText.implicitWidth + 14
+                            implicitHeight: 22
+                            radius: 4
+                            color: Theme.surfaceContainerHighest
+                            border.width: 1
+                            border.color: Theme.outlineVariant
+                            StyledText { id: nKeyText; text: "Ctrl + N"; font.family: "Monospace"; font.pixelSize: 10; font.weight: Font.Bold; anchors.centerIn: parent }
+                        }
+                        StyledText { text: "立即聚焦新建待办输入框"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    }
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            implicitWidth: tabKeyText.implicitWidth + 14
+                            implicitHeight: 22
+                            radius: 4
+                            color: Theme.surfaceContainerHighest
+                            border.width: 1
+                            border.color: Theme.outlineVariant
+                            StyledText { id: tabKeyText; text: "1 / 2 / 3"; font.family: "Monospace"; font.pixelSize: 10; font.weight: Font.Bold; anchors.centerIn: parent }
+                        }
+                        StyledText { text: "无文本输入时秒切【日程】/【待办】/【助理】"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    }
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            implicitWidth: ctrlTabKeyText.implicitWidth + 14
+                            implicitHeight: 22
+                            radius: 4
+                            color: Theme.surfaceContainerHighest
+                            border.width: 1
+                            border.color: Theme.outlineVariant
+                            StyledText { id: ctrlTabKeyText; text: "Ctrl + 1 / 2 / 3"; font.family: "Monospace"; font.pixelSize: 10; font.weight: Font.Bold; anchors.centerIn: parent }
+                        }
+                        StyledText { text: "全局强制切换 Tab 页面"; font.pixelSize: 11; color: Theme.surfaceVariantText }
+                    }
+
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            implicitWidth: rKeyText.implicitWidth + 14
+                            implicitHeight: 22
+                            radius: 4
+                            color: Theme.surfaceContainerHighest
+                            border.width: 1
+                            border.color: Theme.outlineVariant
+                            StyledText { id: rKeyText; text: "Ctrl + R"; font.family: "Monospace"; font.pixelSize: 10; font.weight: Font.Bold; anchors.centerIn: parent }
+                        }
+                        StyledText { text: "即刻同步刷新日历与任务数据"; font.pixelSize: 11; color: Theme.surfaceVariantText }
                     }
                 }
             }

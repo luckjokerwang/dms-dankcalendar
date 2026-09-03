@@ -71,6 +71,7 @@ PluginComponent {
     readonly property string barModule: (globalBarModule.value === "tasks") ? "tasks" : "agenda"
     onActiveModuleChanged: root.refreshAll()
     onBarModuleChanged: root.refreshAll()
+    property bool isPopoutOpen: false
 
     // Popout Dimensions & Actions
     popoutWidth: constants.defaultPopoutWidth
@@ -461,16 +462,61 @@ PluginComponent {
     IpcHandler {
         target: "dankCalendarPlus"
 
+        // 1. Popout Control
+        function toggle() {
+            root.triggerPopout();
+        }
+
+        function open() {
+            if (!root.isPopoutOpen) {
+                root.triggerPopout();
+            }
+        }
+
+        function close() {
+            root.closePopout();
+        }
+
+        // 2. Tab Navigation
+        function openAgenda() {
+            globalActiveModule.set("agenda");
+            globalBarModule.set("agenda");
+            if (!root.isPopoutOpen) {
+                root.triggerPopout();
+            }
+        }
+
+        function openTasks() {
+            globalActiveModule.set("tasks");
+            globalBarModule.set("tasks");
+            if (!root.isPopoutOpen) {
+                root.triggerPopout();
+            }
+        }
+
+        function openAI() {
+            globalActiveModule.set("ai");
+            if (!root.isPopoutOpen) {
+                root.triggerPopout();
+            }
+        }
+
+        // 3. Floating AI Assistant Window
         function toggleAI() {
             root.toggleAiModal();
         }
 
-        function openAI() {
+        function openFloatingAI() {
             globalAiModalOpen.set(true);
         }
 
-        function closeAI() {
+        function closeFloatingAI() {
             globalAiModalOpen.set(false);
+        }
+
+        // 4. Data Refresh
+        function refresh() {
+            root.refreshAll();
         }
     }
 
@@ -478,9 +524,88 @@ PluginComponent {
     popoutContent: Component {
         PopoutComponent {
             id: popout
+            property var parentPopout: null
+            onParentPopoutChanged: {
+                if (parentPopout) {
+                    root.isPopoutOpen = Qt.binding(() => parentPopout.shouldBeVisible);
+                }
+            }
+
             width: root.popoutWidth
             spacing: Theme.spacingM
-            Component.onCompleted: root.refreshAll()
+            focus: true
+
+            Component.onCompleted: {
+                root.refreshAll();
+                popout.forceActiveFocus();
+            }
+
+            Keys.onPressed: event => {
+                var isCtrl = (event.modifiers & Qt.ControlModifier);
+                var isAlt = (event.modifiers & Qt.AltModifier);
+
+                if (isCtrl && event.key === Qt.Key_1) {
+                    globalActiveModule.set("agenda");
+                    globalBarModule.set("agenda");
+                    event.accepted = true;
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_2) {
+                    globalActiveModule.set("tasks");
+                    globalBarModule.set("tasks");
+                    event.accepted = true;
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_3) {
+                    globalActiveModule.set("ai");
+                    event.accepted = true;
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_R) {
+                    root.refreshAll();
+                    event.accepted = true;
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_N) {
+                    globalActiveModule.set("tasks");
+                    globalBarModule.set("tasks");
+                    Qt.callLater(() => {
+                        if (tasksViewComp && tasksViewComp.focusNewTaskInput) {
+                            tasksViewComp.focusNewTaskInput();
+                        }
+                    });
+                    event.accepted = true;
+                    return;
+                }
+
+                // If no modifiers and no active text input is focused
+                var activeItem = popout.Window ? popout.Window.activeFocusItem : null;
+                var isEditingText = activeItem && (activeItem.hasOwnProperty("cursorPosition") || activeItem.hasOwnProperty("inputMethodHints")) && !activeItem.readOnly;
+                if (!isCtrl && !isAlt && !isEditingText) {
+                    if (event.key === Qt.Key_1) {
+                        globalActiveModule.set("agenda");
+                        globalBarModule.set("agenda");
+                        event.accepted = true;
+                        return;
+                    }
+                    if (event.key === Qt.Key_2) {
+                        globalActiveModule.set("tasks");
+                        globalBarModule.set("tasks");
+                        event.accepted = true;
+                        return;
+                    }
+                    if (event.key === Qt.Key_3) {
+                        globalActiveModule.set("ai");
+                        event.accepted = true;
+                        return;
+                    }
+                    if (event.key === Qt.Key_R) {
+                        root.refreshAll();
+                        event.accepted = true;
+                        return;
+                    }
+                }
+            }
 
             // 1. Popout Top Header
             PopoutHeader {
@@ -531,6 +656,7 @@ PluginComponent {
 
             // 4. Tasks View
             TasksView {
+                id: tasksViewComp
                 visible: root.activeModule === "tasks"
                 taskStore: root.taskStore
                 width: parent.width
