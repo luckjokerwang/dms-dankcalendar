@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Widgets
 import qs.Modules.Plugins
+import qs.Services
 
 Item {
     id: store
@@ -94,6 +95,25 @@ Item {
         }
     }
 
+    function showToast(type, message) {
+        if (!message) return;
+        try {
+            if (typeof ToastService !== "undefined") {
+                if (type === "error" && typeof ToastService.showError === "function") {
+                    ToastService.showError(message);
+                } else if (type === "warning" && typeof ToastService.showWarning === "function") {
+                    ToastService.showWarning(message);
+                } else if (typeof ToastService.showInfo === "function") {
+                    ToastService.showInfo(message);
+                }
+            } else {
+                console.log("[TaskStore Toast]", type, message);
+            }
+        } catch (e) {
+            console.warn("[TaskStore] Toast failed:", e, message);
+        }
+    }
+
     Process {
         id: classifyBatchProc
         command: [constants.coreScriptPath, "tasks", "classify-batch"]
@@ -101,33 +121,102 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 var trimmed = (text || "").trim();
-                store.isClassifyingBatch = false;
-                if (!trimmed) return;
+                if (!trimmed) {
+                    store.isClassifyingBatch = false;
+                    return;
+                }
                 try {
                     var res = JSON.parse(trimmed);
                     if (res && res.status === "ok" && res.data && res.data.tasks && res.data.tasks.length > 0) {
                         var updates = [];
                         for (var i = 0; i < res.data.tasks.length; i++) {
                             var t = res.data.tasks[i];
-                            updates.push({ id: t.id, taggedSummary: t.taggedSummary });
+                            updates.push({
+                                id: t.id,
+                                taggedSummary: t.taggedSummary,
+                                cleanSummary: t.cleanSummary || t.summary
+                            });
                         }
                         store.applyBatchTags(updates);
+                    } else if (res && res.status === "ok") {
+                        store.isClassifyingBatch = false;
+                        store.showToast("info", "暂无需要整理或调整分类的待办");
+                    } else {
+                        store.isClassifyingBatch = false;
+                        var errMsg = (res && res.error && res.error.message) ? res.error.message : "智能分类执行失败";
+                        if (res && res.error && res.error.details) {
+                            errMsg += (" (" + res.error.details + ")");
+                        }
+                        store.showToast("error", errMsg);
                     }
                 } catch (e) {
-                    console.warn("[TaskStore] classify batch error:", e);
+                    store.isClassifyingBatch = false;
+                    console.warn("[TaskStore] classify batch parse error:", e);
+                    store.showToast("error", "AI 整理待办返回解析失败");
+                }
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                var trimmed = (text || "").trim();
+                if (trimmed) {
+                    console.warn("[TaskStore] classify batch stderr:", trimmed);
                 }
             }
         }
         onExited: (code) => {
-            store.isClassifyingBatch = false;
+            if (code !== 0 && store.isClassifyingBatch) {
+                store.isClassifyingBatch = false;
+                store.showToast("error", "AI 智能分类进程异常退出 (code: " + code + ")");
+            }
         }
     }
+
+    property string lastApplyTagsStdout: ""
+    property string lastApplyTagsStderr: ""
 
     Process {
         id: applyBatchTagsProc
         command: []
         running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                store.lastApplyTagsStdout = (text || "").trim();
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                store.lastApplyTagsStderr = (text || "").trim();
+            }
+        }
         onExited: (code) => {
+            store.isClassifyingBatch = false;
+            var outText = store.lastApplyTagsStdout;
+            if (outText) {
+                try {
+                    var res = JSON.parse(outText);
+                    if (res && res.status === "ok" && res.data && res.data.success) {
+                        var count = res.data.successCount || 0;
+                        store.showToast("info", "✨ 已成功智能整理 " + count + " 项待办分类");
+                    } else {
+                        var errMsg = "待办分类写入失败";
+                        if (res && res.error && res.error.details) {
+                            errMsg = res.error.details;
+                        } else if (res && res.data && res.data.errors && res.data.errors.length > 0) {
+                            errMsg = res.data.errors.join("; ");
+                        }
+                        store.showToast("error", "⚠️ " + errMsg);
+                    }
+                } catch (e) {
+                    console.warn("[TaskStore] applyBatchTags parse error:", e, outText);
+                    if (code !== 0) {
+                        store.showToast("error", "⚠️ 待办标签写入失败 (code: " + code + ")");
+                    }
+                }
+            } else if (code !== 0) {
+                store.showToast("error", "⚠️ 待办标签写入异常退出: " + (store.lastApplyTagsStderr || ("code " + code)));
+            }
+
             store.fetchTasks();
             store.notifyTasksChanged();
         }
@@ -147,7 +236,12 @@ Item {
     }
 
     function applyBatchTags(updates) {
-        if (!updates || updates.length === 0) return;
+        if (!updates || updates.length === 0) {
+            store.isClassifyingBatch = false;
+            return;
+        }
+        store.lastApplyTagsStdout = "";
+        store.lastApplyTagsStderr = "";
         applyBatchTagsProc.command = [
             constants.coreScriptPath, "tasks", "apply-tags",
             "--payload", JSON.stringify(updates)

@@ -236,19 +236,23 @@ class TaskService:
     def apply_tags_updates(self, updates: List[Dict[str, str]]) -> Dict[str, Any]:
         success_count = 0
         fail_count = 0
+        errors = []
         for item in updates:
             t_id = item.get("id")
             tagged_summary = item.get("taggedSummary")
             if not t_id or not tagged_summary:
                 continue
-            ok = self.dcal.update_task(t_id, summary=tagged_summary)
+            ok, err_msg = self.dcal.update_task_detailed(t_id, summary=tagged_summary)
             if ok:
                 success_count += 1
             else:
                 fail_count += 1
+                task_name = item.get("cleanSummary") or item.get("summary") or t_id
+                errors.append(f"{task_name}: {err_msg or '更新失败'}")
         return {
             "success": fail_count == 0,
             "successCount": success_count,
             "failCount": fail_count,
-            "total": len(updates)
+            "total": len(updates),
+            "errors": errors
         }

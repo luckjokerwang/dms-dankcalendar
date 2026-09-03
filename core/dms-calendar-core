@@ -96,9 +96,13 @@ def handle_tasks(args):
         try:
             updates = json.loads(args.payload) if args.payload else []
             res = service.apply_tags_updates(updates)
-            print(json.dumps(make_ok(res) if res.get("success") else make_err("Apply tags failed", details=str(res.get("errors")))))
+            if res.get("success"):
+                print(json.dumps(make_ok(res), ensure_ascii=False))
+            else:
+                err_detail = "; ".join(res.get("errors", [])) if res.get("errors") else "待办标签写入失败"
+                print(json.dumps(make_err("Apply tags failed", details=err_detail), ensure_ascii=False))
         except Exception as e:
-            print(json.dumps(make_err(f"Apply tags failed: {e}")))
+            print(json.dumps(make_err(f"Apply tags failed: {e}"), ensure_ascii=False))
 
 def handle_provider(args):
     if args.action == "list":

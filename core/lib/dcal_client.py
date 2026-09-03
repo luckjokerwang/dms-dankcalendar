@@ -10,8 +10,9 @@ from typing import List, Dict, Any, Optional
 class DcalClient:
     def __init__(self, timeout: float = 4.0):
         self.timeout = timeout
+        self.last_error: Optional[str] = None
 
-    def call(self, method: str, *args: str) -> Optional[Any]:
+    def call_raw(self, method: str, *args: str) -> tuple[Optional[Any], Optional[str]]:
         cmd = ["dcal", "ipc", method] + list(args)
         try:
             proc = subprocess.run(
@@ -22,16 +23,40 @@ class DcalClient:
                 timeout=self.timeout
             )
             if proc.returncode != 0:
-                return None
+                err_msg = (proc.stderr or proc.stdout or "").strip()
+                self.last_error = err_msg or f"命令退出码异常: {proc.returncode}"
+                return None, self.last_error
             out = proc.stdout.strip()
             if not out:
-                return {"status": "ok"}
+                return {"status": "ok"}, None
             try:
-                return json.loads(out)
+                return json.loads(out), None
             except json.JSONDecodeError:
-                return {"status": "ok", "raw": out}
-        except Exception:
-            return None
+                return {"status": "ok", "raw": out}, None
+        except subprocess.TimeoutExpired:
+            self.last_error = f"dcal IPC 调用超时 ({self.timeout}s)"
+            return None, self.last_error
+        except Exception as e:
+            self.last_error = str(e)
+            return None, self.last_error
+
+    def call(self, method: str, *args: str) -> Optional[Any]:
+        res, _ = self.call_raw(method, *args)
+        return res
+
+    @staticmethod
+    def _format_error(raw_err: Optional[str]) -> str:
+        if not raw_err:
+            return "未知 IPC 错误"
+        err_lower = raw_err.lower()
+        if "eof" in err_lower or "connection reset" in err_lower or "broken pipe" in err_lower:
+            return "日历同步连接中断 (EOF/连接重置)，建议检查网络代理或重启 dcal"
+        if "context deadline exceeded" in err_lower or "timed out" in err_lower:
+            return "日历同步请求超时"
+        if "unauthorized" in err_lower or "auth" in err_lower:
+            return "日历账户授权过期或未登录"
+        lines = [line.strip() for line in raw_err.splitlines() if line.strip() and not line.strip().startswith("Usage:")]
+        return lines[0] if lines else raw_err[:120]
 
     def get_calendars(self) -> List[Dict[str, Any]]:
         res = self.call("calendars.list")
@@ -80,7 +105,7 @@ class DcalClient:
                 pass
         return res is not None
 
-    def update_task(self, task_id: str, summary: Optional[str] = None, priority: Optional[int] = None, due: Optional[str] = None) -> bool:
+    def update_task_detailed(self, task_id: str, summary: Optional[str] = None, priority: Optional[int] = None, due: Optional[str] = None) -> tuple[bool, Optional[str]]:
         args = [f"id={task_id}"]
         if summary is not None:
             args.append(f"summary={summary}")
@@ -88,8 +113,27 @@ class DcalClient:
             args.append(f"priority={priority}")
         if due is not None:
             args.append(f"due={due}")
-        res = self.call("tasks.update", *args)
-        return res is not None
+            
+        res, err = self.call_raw("tasks.update", *args)
+        if res is not None:
+            return True, None
+
+        # 针对网络断开/EOF/连接重置等瞬态错误进行安全重试 1 次
+        retry_keywords = ["eof", "connection reset", "broken pipe", "context canceled", "deadline exceeded"]
+        if err and any(kw in err.lower() for kw in retry_keywords):
+            import time
+            time.sleep(0.5)
+            res_retry, err_retry = self.call_raw("tasks.update", *args)
+            if res_retry is not None:
+                return True, None
+            err = err_retry or err
+
+        formatted_err = self._format_error(err)
+        return False, formatted_err
+
+    def update_task(self, task_id: str, summary: Optional[str] = None, priority: Optional[int] = None, due: Optional[str] = None) -> bool:
+        ok, _ = self.update_task_detailed(task_id, summary=summary, priority=priority, due=due)
+        return ok
 
     def complete_task(self, task_id: str, completed: bool = True) -> bool:
         val = "true" if completed else "false"

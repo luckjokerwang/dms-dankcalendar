@@ -25,6 +25,12 @@ Item {
         }
     }
 
+    function focusNewTaskInput() {
+        if (taskTextInput) {
+            taskTextInput.forceActiveFocus();
+        }
+    }
+
     readonly property real maxListHeight: 420
     implicitWidth: parent ? parent.width : 420
     implicitHeight: visible ? 420 : 0
@@ -286,22 +292,38 @@ Item {
 
             // 1.5 Smart Auto-Classify Trigger Banner
             Rectangle {
-                visible: tasksView.uncategorizedCount > 0
+                id: classifyBanner
+                visible: tasksView.uncategorizedCount > 0 || (activeStore && activeStore.isClassifyingBatch)
                 width: parent.width
                 height: 34
                 radius: 17
-                color: Theme.withAlpha(Theme.primary, 0.12)
+                color: classifyMouseArea.containsMouse && !(activeStore && activeStore.isClassifyingBatch)
+                       ? Theme.withAlpha(Theme.primary, 0.18)
+                       : Theme.withAlpha(Theme.primary, 0.12)
                 border.width: 1
                 border.color: Theme.withAlpha(Theme.primary, 0.3)
+
+                Behavior on color { ColorAnimation { duration: 150 } }
 
                 RowLayout {
                     anchors.centerIn: parent
                     spacing: Theme.spacingS
 
                     DankIcon {
+                        id: classifyIcon
                         name: (activeStore && activeStore.isClassifyingBatch) ? "sync" : "auto_awesome"
                         size: 15
                         color: Theme.primary
+
+                        RotationAnimation {
+                            target: classifyIcon
+                            property: "rotation"
+                            from: 0
+                            to: 360
+                            duration: 1000
+                            loops: Animation.Infinite
+                            running: (activeStore && activeStore.isClassifyingBatch)
+                        }
                     }
 
                     StyledText {
@@ -315,8 +337,10 @@ Item {
                 }
 
                 MouseArea {
+                    id: classifyMouseArea
                     anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    cursorShape: (activeStore && activeStore.isClassifyingBatch) ? Qt.ArrowCursor : Qt.PointingHandCursor
                     enabled: !(activeStore && activeStore.isClassifyingBatch)
                     onClicked: {
                         if (activeStore)
