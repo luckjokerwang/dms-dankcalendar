@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.11-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.12-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -86,7 +86,9 @@
 | **右键点击胶囊 / 点击 ↻** | 触发底层账户全量同步（`dcal ipc accounts.refresh`），带 360° GPU 加速旋转动效 |
 | **弹窗 `+` 按钮** | 在 DankCalendar 中打开新建事件界面 |
 | **待办输入框回车** | 快速创建待办（支持输入 `!1` 设为高优，当前分类下自动继承标签） |
-| **弹窗内 `1 / 2 / 3`** | 无文本焦点时秒切【日程】/【待办】/【助理】Tab 页面 |
+| **弹窗内 `1 / 2 / 3`** | 快速切换【日程】/【待办】/【助理】Tab 页面（亦支持 `Ctrl+1 / 2 / 3`） |
+| **弹窗内 `Ctrl + Tab / Ctrl + Shift + Tab`** | 顺时针 / 逆时针循环切换【日程】/【待办】/【助理】Tab 页面 |
+| **待办/日程 `j / k` 或 `↑ / ↓`** | 纯键盘列表上下漫游（高亮选中、视口平滑跟随，待办支持 `Space` 打勾、`c` 复制、`d` 删除、`i / a / Enter` 回顶打字） |
 | **弹窗内 `Ctrl + N`** | 立即聚焦新建待办输入框并支持输入快捷键创建 |
 | **弹窗内 `Ctrl + R`** | 即刻同步刷新日历与待办数据 |
 | **弹窗内 `Esc`** | 快速关闭主弹窗 |

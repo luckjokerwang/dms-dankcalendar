@@ -1605,6 +1605,12 @@ StyledRect {
                             }
 
                             var isCtrl = (event.modifiers & Qt.ControlModifier);
+                            if (isCtrl && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                                var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                                root.switchToModule(forward ? "agenda" : "tasks");
+                                event.accepted = true;
+                                return;
+                            }
                             if (isCtrl && event.key === Qt.Key_1) {
                                 root.switchToModule("agenda");
                                 event.accepted = true;

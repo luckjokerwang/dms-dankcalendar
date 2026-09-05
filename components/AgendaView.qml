@@ -14,6 +14,10 @@ Item {
     readonly property CalendarStore activeStore: calendarStore || (rootWidget ? rootWidget.calendarStore : null)
 
     signal closeRequested()
+    signal switchToModule(string moduleName)
+
+    focus: true
+    property int selectedIndex: -1
 
     function copyToClipboard(txt) {
         if (!txt) return;
@@ -27,6 +31,183 @@ Item {
 
     implicitWidth: parent ? parent.width : 420
     implicitHeight: visible ? 420 : 0
+
+    function focusAgenda() {
+        agendaView.forceActiveFocus();
+        if (selectedIndex === -1) {
+            selectNextEvent();
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            Qt.callLater(() => focusAgenda());
+        }
+    }
+
+    function getEventIndices() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        var indices = [];
+        for (var i = 0; i < model.length; i++) {
+            if (model[i] && model[i].kind === "event") {
+                indices.push(i);
+            }
+        }
+        return indices;
+    }
+
+    function selectNextEvent() {
+        var indices = getEventIndices();
+        if (indices.length === 0) return;
+        if (agendaView.selectedIndex === -1) {
+            agendaView.selectedIndex = indices[0];
+            return;
+        }
+        for (var i = 0; i < indices.length; i++) {
+            if (indices[i] > agendaView.selectedIndex) {
+                agendaView.selectedIndex = indices[i];
+                return;
+            }
+        }
+    }
+
+    function selectPrevEvent() {
+        var indices = getEventIndices();
+        if (indices.length === 0) return;
+        if (agendaView.selectedIndex === -1) {
+            agendaView.selectedIndex = indices[indices.length - 1];
+            return;
+        }
+        for (var i = indices.length - 1; i >= 0; i--) {
+            if (indices[i] < agendaView.selectedIndex) {
+                agendaView.selectedIndex = indices[i];
+                return;
+            }
+        }
+    }
+
+    function openCurrentEvent() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        if (agendaView.selectedIndex >= 0 && agendaView.selectedIndex < model.length) {
+            var item = model[agendaView.selectedIndex];
+            if (item && item.kind === "event" && item.ev) {
+                Quickshell.execDetached(["dcal", "ipc", "ui.openEvent", "uid=" + item.ev.uid, "start=" + item.ev.start]);
+                agendaView.closeRequested();
+            }
+        }
+    }
+
+    function copyCurrentEvent() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        if (agendaView.selectedIndex >= 0 && agendaView.selectedIndex < model.length) {
+            var item = model[agendaView.selectedIndex];
+            if (item && item.kind === "event" && item.ev) {
+                var ev = item.ev;
+                var details = (ev.cleanSummary || ev.summary || "");
+                if (activeStore) {
+                    var timeStr = activeStore.eventTimeLabel(ev);
+                    if (timeStr) details += " (" + timeStr + ")";
+                }
+                if (ev.location) details += " @" + ev.location;
+                agendaView.copyToClipboard(details);
+            }
+        }
+    }
+
+    function deleteCurrentEvent() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        if (agendaView.selectedIndex >= 0 && agendaView.selectedIndex < model.length) {
+            var item = model[agendaView.selectedIndex];
+            if (item && item.kind === "event" && item.ev && activeStore) {
+                activeStore.deleteEvent(item.ev);
+            }
+        }
+    }
+
+    Keys.onPressed: (event) => {
+        var isCtrl = (event.modifiers & Qt.ControlModifier);
+        if (isCtrl) {
+            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                agendaView.switchToModule(forward ? "tasks" : "ai");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_1) {
+                agendaView.switchToModule("agenda");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_2) {
+                agendaView.switchToModule("tasks");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_3) {
+                agendaView.switchToModule("ai");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_R) {
+                if (activeStore) activeStore.refreshAll();
+                event.accepted = true;
+                return;
+            }
+        }
+
+        if (event.key === Qt.Key_Escape) {
+            agendaView.closeRequested();
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_1) {
+            agendaView.switchToModule("agenda");
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_2) {
+            agendaView.switchToModule("tasks");
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_3) {
+            agendaView.switchToModule("ai");
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_Down || event.key === Qt.Key_J) {
+            selectNextEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
+            selectPrevEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_O) {
+            openCurrentEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_C || event.key === Qt.Key_Y) {
+            copyCurrentEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_D || event.key === Qt.Key_Delete) {
+            deleteCurrentEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_R) {
+            if (activeStore) activeStore.refreshAll();
+            event.accepted = true;
+            return;
+        }
+    }
 
     function resetToToday() {
         if (agendaFlick) {
@@ -86,6 +267,7 @@ Item {
                 delegate: Item {
                     id: agendaRow
                     required property var modelData
+                    required property int index
                     readonly property string phase: (modelData.kind === "event" && activeStore) ? activeStore.eventPhase(modelData.ev) : ""
 
                     width: eventColumn.width
@@ -143,9 +325,26 @@ Item {
                     Rectangle {
                         id: eventRect
                         visible: agendaRow.modelData.kind === "event"
+                        readonly property bool isSelected: agendaView.selectedIndex === agendaRow.index
                         anchors.fill: parent
                         radius: Theme.cornerRadiusSmall
-                        color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+                        color: isSelected ? Theme.withAlpha(Theme.primary, 0.14) : (rowHover.hovered ? Theme.surfaceContainerHigh : "transparent")
+                        border.width: isSelected ? 1.5 : 0
+                        border.color: Theme.primary
+
+                        Connections {
+                            target: agendaView
+                            function onSelectedIndexChanged() {
+                                if (agendaView.selectedIndex === agendaRow.index) {
+                                    var itemY = agendaRow.mapToItem(eventColumn, 0, 0).y;
+                                    if (itemY < agendaFlick.contentY) {
+                                        agendaFlick.contentY = Math.max(0, itemY - Theme.spacingS);
+                                    } else if (itemY + agendaRow.height > agendaFlick.contentY + agendaFlick.height) {
+                                        agendaFlick.contentY = itemY + agendaRow.height - agendaFlick.height + Theme.spacingS;
+                                    }
+                                }
+                            }
+                        }
 
                         HoverHandler {
                             id: rowHover
@@ -171,6 +370,7 @@ Item {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
+                                        agendaView.selectedIndex = agendaRow.index;
                                         if (agendaRow.modelData.kind === "event" && agendaRow.modelData.ev) {
                                             var ev = agendaRow.modelData.ev;
                                             Quickshell.execDetached(["dcal", "ipc", "ui.openEvent", "uid=" + ev.uid, "start=" + ev.start]);
@@ -275,9 +475,9 @@ Item {
                                 }
                             }
 
-                            // Action Buttons: Copy, Open in dcal, Delete (Visible on Hover)
+                            // Action Buttons: Copy, Open in dcal, Delete (Visible on Hover or Selected)
                             RowLayout {
-                                visible: rowHover.hovered || evCopyMouse.containsMouse || openMouse.containsMouse || deleteMouse.containsMouse
+                                visible: rowHover.hovered || evCopyMouse.containsMouse || openMouse.containsMouse || deleteMouse.containsMouse || eventRect.isSelected
                                 spacing: 2
                                 Layout.alignment: Qt.AlignVCenter
 

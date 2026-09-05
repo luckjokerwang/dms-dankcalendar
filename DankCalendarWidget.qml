@@ -86,6 +86,19 @@ PluginComponent {
         globalActiveModule.set(next);
     }
 
+    function switchTabNext(forward = true) {
+        var modules = ["agenda", "tasks", "ai"];
+        var currIdx = modules.indexOf(root.activeModule);
+        if (currIdx === -1) currIdx = 0;
+        var nextIdx = forward ? ((currIdx + 1) % modules.length) : ((currIdx - 1 + modules.length) % modules.length);
+        var nextMod = modules[nextIdx];
+        globalActiveModule.set(nextMod);
+        if (nextMod === "agenda" || nextMod === "tasks") {
+            globalBarModule.set(nextMod);
+        }
+        root.requestAutoFocus();
+    }
+
     Timer {
         id: autoRefreshTimer
         interval: 350
@@ -373,6 +386,7 @@ PluginComponent {
             if (!root.isPopoutOpen) {
                 root.triggerPopout();
             }
+            root.requestAutoFocus();
         }
 
         function openTasks() {
@@ -435,6 +449,10 @@ PluginComponent {
                     if (tasksViewComp && tasksViewComp.focusNewTaskInput) {
                         tasksViewComp.focusNewTaskInput();
                     }
+                } else if (root.activeModule === "agenda") {
+                    if (agendaViewComp && agendaViewComp.focusAgenda) {
+                        agendaViewComp.focusAgenda();
+                    }
                 }
             }
 
@@ -478,6 +496,12 @@ PluginComponent {
                 var isCtrl = (event.modifiers & Qt.ControlModifier);
                 var isAlt = (event.modifiers & Qt.AltModifier);
 
+                if (isCtrl && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                    var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                    root.switchTabNext(forward);
+                    event.accepted = true;
+                    return;
+                }
                 if (isCtrl && event.key === Qt.Key_1) {
                     globalActiveModule.set("agenda");
                     globalBarModule.set("agenda");
@@ -580,12 +604,18 @@ PluginComponent {
 
             // 3. Agenda View
             AgendaView {
+                id: agendaViewComp
                 visible: root.activeModule === "agenda"
                 calendarStore: root.calendarStore
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
                 onCloseRequested: {
                     if (popout.closePopout) popout.closePopout();
+                }
+                onSwitchToModule: (mod) => {
+                    globalActiveModule.set(mod);
+                    if (mod === "agenda" || mod === "tasks") globalBarModule.set(mod);
+                    root.requestAutoFocus();
                 }
             }
 

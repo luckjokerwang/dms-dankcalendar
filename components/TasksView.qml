@@ -27,8 +27,199 @@ Item {
     }
 
     function focusNewTaskInput() {
+        tasksView.selectedIndex = -1;
         if (taskTextInput) {
             taskTextInput.forceActiveFocus();
+        }
+        if (tasksFlick) {
+            tasksFlick.contentY = 0;
+        }
+    }
+
+    focus: true
+
+    property int selectedIndex: -1
+
+    readonly property var availableTagList: {
+        var list = [""];
+        if (tasksView.dueTasksCount > 0) list.push("__due__");
+        if (activeStore && activeStore.allTags) {
+            for (var i = 0; i < activeStore.allTags.length; i++) {
+                list.push(activeStore.allTags[i].name);
+            }
+        }
+        return list;
+    }
+
+    function selectNextTag() {
+        var tags = availableTagList;
+        if (tags.length <= 1) return;
+        var idx = tags.indexOf(tasksView.filterTag);
+        var nextIdx = (idx + 1) % tags.length;
+        tasksView.filterTag = tags[nextIdx];
+        tasksView.selectedIndex = 0;
+        if (tasksFlick) tasksFlick.contentY = 0;
+    }
+
+    function selectPrevTag() {
+        var tags = availableTagList;
+        if (tags.length <= 1) return;
+        var idx = tags.indexOf(tasksView.filterTag);
+        var prevIdx = (idx - 1 + tags.length) % tags.length;
+        tasksView.filterTag = tags[prevIdx];
+        tasksView.selectedIndex = 0;
+        if (tasksFlick) tasksFlick.contentY = 0;
+    }
+
+    function selectNextTask() {
+        var total = tasksView.filteredPendingTasks.length;
+        if (total === 0) return;
+        if (tasksView.selectedIndex < total - 1) {
+            tasksView.selectedIndex++;
+        }
+    }
+
+    function selectPrevTask() {
+        var total = tasksView.filteredPendingTasks.length;
+        if (total === 0) return;
+        if (tasksView.selectedIndex > 0) {
+            tasksView.selectedIndex--;
+        } else if (tasksView.selectedIndex === 0) {
+            tasksView.selectedIndex = -1;
+            focusNewTaskInput();
+        } else if (tasksView.selectedIndex === -1) {
+            tasksView.selectedIndex = total - 1;
+        }
+    }
+
+    function toggleCurrentTask() {
+        if (tasksView.selectedIndex >= 0 && tasksView.selectedIndex < tasksView.filteredPendingTasks.length) {
+            var task = tasksView.filteredPendingTasks[tasksView.selectedIndex];
+            if (task && activeStore) {
+                activeStore.completeTask(task.id, true);
+            }
+        }
+    }
+
+    function copyCurrentTask() {
+        if (tasksView.selectedIndex >= 0 && tasksView.selectedIndex < tasksView.filteredPendingTasks.length) {
+            var task = tasksView.filteredPendingTasks[tasksView.selectedIndex];
+            if (task) {
+                var txt = task.cleanSummary || task.summary || "";
+                tasksView.copyToClipboard(txt);
+            }
+        }
+    }
+
+    function deleteCurrentTask() {
+        if (tasksView.selectedIndex >= 0 && tasksView.selectedIndex < tasksView.filteredPendingTasks.length) {
+            var task = tasksView.filteredPendingTasks[tasksView.selectedIndex];
+            if (task && activeStore) {
+                activeStore.deleteTask(task.id);
+                if (tasksView.selectedIndex >= tasksView.filteredPendingTasks.length - 1) {
+                    tasksView.selectedIndex = Math.max(0, tasksView.filteredPendingTasks.length - 2);
+                }
+            }
+        }
+    }
+
+    Keys.onPressed: (event) => {
+        var isCtrl = (event.modifiers & Qt.ControlModifier);
+        if (isCtrl) {
+            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                tasksView.switchToModule(forward ? "ai" : "agenda");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_1) {
+                tasksView.switchToModule("agenda");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_2) {
+                tasksView.switchToModule("tasks");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_3) {
+                tasksView.switchToModule("ai");
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_R) {
+                if (activeStore) activeStore.fetchTasks();
+                event.accepted = true;
+                return;
+            }
+            if (event.key === Qt.Key_N) {
+                focusNewTaskInput();
+                event.accepted = true;
+                return;
+            }
+        }
+
+        if (event.key === Qt.Key_Escape) {
+            tasksView.closeRequested();
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_1) {
+            tasksView.switchToModule("agenda");
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_2) {
+            tasksView.switchToModule("tasks");
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_3) {
+            tasksView.switchToModule("ai");
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_Down || event.key === Qt.Key_J) {
+            selectNextTask();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
+            selectPrevTask();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Space) {
+            toggleCurrentTask();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_C || event.key === Qt.Key_Y) {
+            copyCurrentTask();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_D || event.key === Qt.Key_Delete) {
+            deleteCurrentTask();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_A || event.key === Qt.Key_I || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Slash) {
+            focusNewTaskInput();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Right || event.key === Qt.Key_L) {
+            selectNextTag();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_Left || event.key === Qt.Key_H) {
+            selectPrevTag();
+            event.accepted = true;
+            return;
         }
     }
 
@@ -46,6 +237,7 @@ Item {
             activeStore.createTask(rawText, tasksView.filterCalendarId, tasksView.filterTag);
         }
         taskTextInput.text = "";
+        tasksView.selectedIndex = -1;
     }
 
     readonly property real maxListHeight: 420
@@ -241,10 +433,120 @@ Item {
         }
     }
 
+    // Pinned Top Area: Quick Add Task Input Box (Always visible, never scrolled away)
+    Item {
+        id: topInputBox
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: Theme.spacingS
+        anchors.leftMargin: Theme.spacingS
+        anchors.rightMargin: Theme.spacingS
+        height: 42
+
+        DankTextField {
+            id: taskTextInput
+            anchors.fill: parent
+            leftIconName: "add"
+            leftIconSize: 20
+            placeholderText: (tasksView.filterTag && tasksView.filterTag !== "__due__")
+                             ? ("添加新待办至 #" + tasksView.filterTag + "… (可省略 #标签)")
+                             : "添加新待办… (支持 !1 优先级, #标签 分类)"
+            font.pixelSize: Theme.fontSizeMedium
+            topPadding: 9
+            bottomPadding: 7
+            rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
+
+            onAccepted: tasksView.submitNewTask()
+
+            onActiveFocusChanged: {
+                if (activeFocus) {
+                    tasksView.selectedIndex = -1;
+                }
+            }
+
+            Keys.onPressed: event => {
+                var isCtrl = (event.modifiers & Qt.ControlModifier);
+                if (event.key === Qt.Key_Down && tasksView.filteredPendingTasks.length > 0) {
+                    tasksView.selectedIndex = 0;
+                    tasksView.forceActiveFocus();
+                    event.accepted = true;
+                    return;
+                }
+                if (event.key === Qt.Key_Up) {
+                    event.accepted = true;
+                    return;
+                }
+                if (event.key === Qt.Key_Escape) {
+                    event.accepted = true;
+                    if (taskTextInput.text.length > 0) {
+                        taskTextInput.text = "";
+                    } else {
+                        tasksView.closeRequested();
+                    }
+                    return;
+                }
+                if (isCtrl && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                    var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                    tasksView.switchToModule(forward ? "ai" : "agenda");
+                    event.accepted = true;
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_1) {
+                    event.accepted = true;
+                    tasksView.switchToModule("agenda");
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_2) {
+                    event.accepted = true;
+                    tasksView.switchToModule("tasks");
+                    return;
+                }
+                if (isCtrl && event.key === Qt.Key_3) {
+                    event.accepted = true;
+                    tasksView.switchToModule("ai");
+                    return;
+                }
+            }
+
+            Rectangle {
+                visible: taskTextInput.text.trim().length > 0
+                width: 28
+                height: 28
+                radius: 14
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spacingS
+                anchors.verticalCenter: parent.verticalCenter
+                color: addBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
+
+                DankIcon {
+                    name: "arrow_forward"
+                    size: 16
+                    color: Theme.primaryText
+                    anchors.centerIn: parent
+                }
+
+                MouseArea {
+                    id: addBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: tasksView.submitNewTask()
+                }
+            }
+        }
+    }
+
     DankFlickable {
         id: tasksFlick
-        anchors.fill: parent
-        anchors.margins: Theme.spacingS
+        anchors.top: topInputBox.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Theme.spacingS
+        anchors.leftMargin: Theme.spacingS
+        anchors.rightMargin: Theme.spacingS
+        anchors.bottomMargin: Theme.spacingS
         contentHeight: taskCol.implicitHeight
         clip: true
 
@@ -252,74 +554,6 @@ Item {
             id: taskCol
             width: tasksFlick.width
             spacing: Theme.spacingM
-
-            // 1. Quick Add Task Input Box using DMS standard DankTextField
-            DankTextField {
-                id: taskTextInput
-                width: parent.width
-                height: 42
-                leftIconName: "add"
-                leftIconSize: 20
-                placeholderText: (tasksView.filterTag && tasksView.filterTag !== "__due__")
-                                 ? ("添加新待办至 #" + tasksView.filterTag + "… (可省略 #标签)")
-                                 : "添加新待办… (支持 !1 优先级, #标签 分类)"
-                font.pixelSize: Theme.fontSizeMedium
-                topPadding: 9
-                bottomPadding: 7
-                rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
-
-                onAccepted: tasksView.submitNewTask()
-
-                Keys.onPressed: event => {
-                    var isCtrl = (event.modifiers & Qt.ControlModifier);
-                    if (event.key === Qt.Key_Escape) {
-                        event.accepted = true;
-                        tasksView.closeRequested();
-                        return;
-                    }
-                    if (isCtrl && event.key === Qt.Key_1) {
-                        event.accepted = true;
-                        tasksView.switchToModule("agenda");
-                        return;
-                    }
-                    if (isCtrl && event.key === Qt.Key_2) {
-                        event.accepted = true;
-                        tasksView.switchToModule("tasks");
-                        return;
-                    }
-                    if (isCtrl && event.key === Qt.Key_3) {
-                        event.accepted = true;
-                        tasksView.switchToModule("ai");
-                        return;
-                    }
-                }
-
-                Rectangle {
-                    visible: taskTextInput.text.trim().length > 0
-                    width: 28
-                    height: 28
-                    radius: 14
-                    anchors.right: parent.right
-                    anchors.rightMargin: Theme.spacingS
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: addBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
-
-                    DankIcon {
-                        name: "arrow_forward"
-                        size: 16
-                        color: Theme.primaryText
-                        anchors.centerIn: parent
-                    }
-
-                    MouseArea {
-                        id: addBtnMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: tasksView.submitNewTask()
-                    }
-                }
-            }
 
             // 1.5 Smart Auto-Classify Trigger Banner
             Rectangle {
@@ -600,14 +834,40 @@ Item {
                     delegate: Rectangle {
                         id: pendingRow
                         required property var modelData
+                        required property int index
+
+                        readonly property bool isSelected: tasksView.selectedIndex === index
 
                         width: parent.width
                         implicitHeight: Math.max(48, rowContent.implicitHeight + Theme.spacingS * 2)
                         radius: Theme.cornerRadiusSmall
-                        color: rowHover.hovered ? Theme.surfaceContainerHigh : "transparent"
+                        color: isSelected ? Theme.withAlpha(Theme.primary, 0.14) : (rowHover.hovered ? Theme.surfaceContainerHigh : "transparent")
+                        border.width: isSelected ? 1.5 : 0
+                        border.color: Theme.primary
+
+                        Connections {
+                            target: tasksView
+                            function onSelectedIndexChanged() {
+                                if (tasksView.selectedIndex === pendingRow.index) {
+                                    var itemY = pendingRow.mapToItem(taskCol, 0, 0).y;
+                                    if (itemY < tasksFlick.contentY) {
+                                        tasksFlick.contentY = Math.max(0, itemY - Theme.spacingS);
+                                    } else if (itemY + pendingRow.height > tasksFlick.contentY + tasksFlick.height) {
+                                        tasksFlick.contentY = itemY + pendingRow.height - tasksFlick.height + Theme.spacingS;
+                                    }
+                                }
+                            }
+                        }
 
                         HoverHandler {
                             id: rowHover
+                        }
+
+                        TapHandler {
+                            onTapped: {
+                                tasksView.selectedIndex = pendingRow.index;
+                                tasksView.forceActiveFocus();
+                            }
                         }
 
                         RowLayout {
@@ -769,9 +1029,9 @@ Item {
                                 }
                             }
 
-                            // Action Buttons: Copy & Delete (Visible on Hover)
+                            // Action Buttons: Copy & Delete (Visible on Hover or Selected)
                             RowLayout {
-                                visible: rowHover.hovered || copyMouse.containsMouse || delMouse.containsMouse
+                                visible: rowHover.hovered || copyMouse.containsMouse || delMouse.containsMouse || pendingRow.isSelected
                                 spacing: 2
                                 Layout.alignment: Qt.AlignVCenter
 
