@@ -9,6 +9,8 @@ import qs.Services
 Item {
     id: store
 
+    property string pluginId: (parent && parent.pluginId) ? parent.pluginId : "dankCalendarPlus"
+
     DankCalendarConstants { id: constants }
 
     // State

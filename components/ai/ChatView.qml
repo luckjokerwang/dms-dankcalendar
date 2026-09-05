@@ -5,7 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Common
 import qs.Widgets
-import "file:/usr/share/quickshell/dms/Modals/FileBrowser" as DMSFileBrowser
+import qs.Modals.FileBrowser
 
 StyledRect {
     id: root
@@ -785,7 +785,7 @@ StyledRect {
     }
 
     // Native DMS File Browser Modal
-    DMSFileBrowser.FileBrowserSurfaceModal {
+    FileBrowserSurfaceModal {
         id: nativeFileBrowser
         browserTitle: "选择图片或日程文档"
         browserIcon: "folder_open"
