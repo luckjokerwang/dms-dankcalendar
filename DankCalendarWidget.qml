@@ -72,6 +72,7 @@ PluginComponent {
     onActiveModuleChanged: root.refreshAll()
     onBarModuleChanged: root.refreshAll()
     property bool isPopoutOpen: false
+    signal requestAutoFocus()
 
     // Popout Dimensions & Actions
     popoutWidth: constants.defaultPopoutWidth
@@ -347,118 +348,6 @@ PluginComponent {
             }
         }
     }
-
-    // Centered AI Modal Window
-    PluginGlobalVar {
-        id: globalAiModalOpen
-        varName: "dankCalendarAiModalOpen"
-        defaultValue: false
-    }
-
-    function toggleAiModal() {
-        globalAiModalOpen.set(!globalAiModalOpen.value);
-    }
-
-    Loader {
-        id: aiModalWindowLoader
-        active: globalAiModalOpen.value === true
-
-        sourceComponent: PanelWindow {
-            id: aiModalWindow
-            WlrLayershell.namespace: "dms:plugins:dankcalendar-ai-modal"
-            WlrLayershell.layer: WlrLayershell.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-            color: "transparent"
-            anchors {
-                top: true
-                bottom: true
-                left: true
-                right: true
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                color: "#80000000"
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: globalAiModalOpen.set(false)
-                }
-            }
-
-            StyledRect {
-                id: modalContainer
-                width: 620
-                height: 680
-                anchors.centerIn: parent
-                color: Theme.surfaceContainerHighest
-                radius: Theme.cornerRadiusLarge
-                border.width: 1
-                border.color: Theme.outlineVariant
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingM
-                    spacing: Theme.spacingS
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingS
-
-                        DankIcon {
-                            name: "smart_toy"
-                            size: 22
-                            color: Theme.primary
-                        }
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: "Dank Calendar Plus AI 排程助理"
-                            font.pixelSize: Theme.fontSizeMedium
-                            font.weight: Font.Bold
-                            color: Theme.surfaceText
-                        }
-
-                        StyledRect {
-                            implicitWidth: 32
-                            implicitHeight: 32
-                            radius: 16
-                            color: mCloseHover.hovered ? Theme.surfaceContainerHigh : "transparent"
-
-                            DankIcon {
-                                anchors.centerIn: parent
-                                name: "close"
-                                size: 18
-                                color: Theme.surfaceVariantText
-                            }
-
-                            HoverHandler { id: mCloseHover }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: globalAiModalOpen.set(false)
-                            }
-                        }
-                    }
-
-                    ChatView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        aiScriptPath: root.aiScriptPath
-                        batchScriptPath: root.batchScriptPath
-                        sessionScriptPath: root.sessionScriptPath
-                        pasteHelperPath: root.pasteHelperPath
-                        providerScriptPath: root.providerScriptPath
-                        onScheduleConfirmed: {
-                            root.refreshAll()
-                            syncFollowupTimer.restart()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     IpcHandler {
         target: "dankCalendarPlus"
 
@@ -492,6 +381,7 @@ PluginComponent {
             if (!root.isPopoutOpen) {
                 root.triggerPopout();
             }
+            root.requestAutoFocus();
         }
 
         function openAI() {
@@ -499,22 +389,22 @@ PluginComponent {
             if (!root.isPopoutOpen) {
                 root.triggerPopout();
             }
+            root.requestAutoFocus();
         }
 
-        // 3. Floating AI Assistant Window
         function toggleAI() {
-            root.toggleAiModal();
+            if (root.isPopoutOpen && root.activeModule === "ai") {
+                root.closePopout();
+            } else {
+                globalActiveModule.set("ai");
+                if (!root.isPopoutOpen) {
+                    root.triggerPopout();
+                }
+                root.requestAutoFocus();
+            }
         }
 
-        function openFloatingAI() {
-            globalAiModalOpen.set(true);
-        }
-
-        function closeFloatingAI() {
-            globalAiModalOpen.set(false);
-        }
-
-        // 4. Data Refresh
+        // 3. Data Refresh
         function refresh() {
             root.refreshAll();
         }
@@ -535,9 +425,53 @@ PluginComponent {
             spacing: Theme.spacingM
             focus: true
 
+            function autoFocusInput() {
+                if (!root.isPopoutOpen) return;
+                if (root.activeModule === "ai") {
+                    if (chatViewComp && chatViewComp.focusInput) {
+                        chatViewComp.focusInput();
+                    }
+                } else if (root.activeModule === "tasks") {
+                    if (tasksViewComp && tasksViewComp.focusNewTaskInput) {
+                        tasksViewComp.focusNewTaskInput();
+                    }
+                }
+            }
+
+            Connections {
+                target: popout.parentPopout || null
+                function onShouldBeVisibleChanged() {
+                    if (popout.parentPopout && popout.parentPopout.shouldBeVisible) {
+                        autoFocusTimer.restart();
+                    }
+                }
+            }
+
+            Connections {
+                target: root
+                function onRequestAutoFocus() {
+                    autoFocusTimer.restart();
+                }
+                function onActiveModuleChanged() {
+                    if (root.isPopoutOpen) {
+                        autoFocusTimer.restart();
+                    }
+                }
+            }
+
+            Timer {
+                id: autoFocusTimer
+                interval: 80
+                repeat: false
+                onTriggered: {
+                    popout.autoFocusInput();
+                }
+            }
+
             Component.onCompleted: {
                 root.refreshAll();
                 popout.forceActiveFocus();
+                autoFocusTimer.restart();
             }
 
             Keys.onPressed: event => {
@@ -640,6 +574,7 @@ PluginComponent {
                     if (mod === "agenda" || mod === "tasks") {
                         globalBarModule.set(mod);
                     }
+                    root.requestAutoFocus();
                 }
             }
 
@@ -661,10 +596,19 @@ PluginComponent {
                 taskStore: root.taskStore
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
+                onCloseRequested: {
+                    if (popout.closePopout) popout.closePopout();
+                }
+                onSwitchToModule: (mod) => {
+                    globalActiveModule.set(mod);
+                    if (mod === "agenda" || mod === "tasks") globalBarModule.set(mod);
+                    root.requestAutoFocus();
+                }
             }
 
             // 5. AI Assistant View
             ChatView {
+                id: chatViewComp
                 visible: root.activeModule === "ai"
                 aiScriptPath: root.aiScriptPath
                 batchScriptPath: root.batchScriptPath
@@ -673,6 +617,14 @@ PluginComponent {
                 providerScriptPath: root.providerScriptPath
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
+                onCloseRequested: {
+                    if (popout.closePopout) popout.closePopout();
+                }
+                onSwitchToModule: (mod) => {
+                    globalActiveModule.set(mod);
+                    if (mod === "agenda" || mod === "tasks") globalBarModule.set(mod);
+                    root.requestAutoFocus();
+                }
                 onScheduleConfirmed: {
                     root.refreshAll()
                     syncFollowupTimer.restart()

@@ -39,6 +39,21 @@ StyledRect {
     property int inputHistoryIndex: -1
     property string temporaryDraft: ""
 
+    signal closeRequested()
+    signal switchToModule(string moduleName)
+
+    function focusInput() {
+        if (chatInputField) {
+            chatInputField.forceActiveFocus();
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            Qt.callLater(() => focusInput());
+        }
+    }
+
     function copyToClipboard(txt) {
         if (!txt) return
         Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy 2>/dev/null || printf '%s' \"$1\" | xclip -selection clipboard 2>/dev/null", "sh", txt])
@@ -1546,7 +1561,6 @@ StyledRect {
                         Layout.fillWidth: true
                         placeholderText: "输入排程需求、按 Ctrl+V 粘贴截图或输入 / 选用指令..."
                         focus: true
-                        keyForwardTargets: [chatInputField]
 
                         onTextChanged: {
                             if (root.isLikelyFilePath(text)) {
@@ -1579,7 +1593,35 @@ StyledRect {
                         }
 
                         Keys.onPressed: (event) => {
-                            if (event.key === Qt.Key_V && (event.modifiers & Qt.ControlModifier)) {
+                            if (event.key === Qt.Key_Escape) {
+                                if (root.showCommandPalette) {
+                                    root.showCommandPalette = false;
+                                    event.accepted = true;
+                                    return;
+                                }
+                                root.closeRequested();
+                                event.accepted = true;
+                                return;
+                            }
+
+                            var isCtrl = (event.modifiers & Qt.ControlModifier);
+                            if (isCtrl && event.key === Qt.Key_1) {
+                                root.switchToModule("agenda");
+                                event.accepted = true;
+                                return;
+                            }
+                            if (isCtrl && event.key === Qt.Key_2) {
+                                root.switchToModule("tasks");
+                                event.accepted = true;
+                                return;
+                            }
+                            if (isCtrl && event.key === Qt.Key_3) {
+                                root.switchToModule("ai");
+                                event.accepted = true;
+                                return;
+                            }
+
+                            if (event.key === Qt.Key_V && isCtrl) {
                                 event.accepted = true
                                 root.triggerPasteClipboard()
                                 return

@@ -14,6 +14,7 @@ Item {
     readonly property TaskStore activeStore: taskStore || (rootWidget ? rootWidget.taskStore : null)
 
     signal closeRequested()
+    signal switchToModule(string moduleName)
 
     function copyToClipboard(txt) {
         if (!txt) return;
@@ -28,6 +29,12 @@ Item {
     function focusNewTaskInput() {
         if (taskTextInput) {
             taskTextInput.forceActiveFocus();
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            Qt.callLater(() => focusNewTaskInput());
         }
     }
 
@@ -262,6 +269,30 @@ Item {
                 rightAccessoryWidth: text.trim().length > 0 ? 36 : 0
 
                 onAccepted: tasksView.submitNewTask()
+
+                Keys.onPressed: event => {
+                    var isCtrl = (event.modifiers & Qt.ControlModifier);
+                    if (event.key === Qt.Key_Escape) {
+                        event.accepted = true;
+                        tasksView.closeRequested();
+                        return;
+                    }
+                    if (isCtrl && event.key === Qt.Key_1) {
+                        event.accepted = true;
+                        tasksView.switchToModule("agenda");
+                        return;
+                    }
+                    if (isCtrl && event.key === Qt.Key_2) {
+                        event.accepted = true;
+                        tasksView.switchToModule("tasks");
+                        return;
+                    }
+                    if (isCtrl && event.key === Qt.Key_3) {
+                        event.accepted = true;
+                        tasksView.switchToModule("ai");
+                        return;
+                    }
+                }
 
                 Rectangle {
                     visible: taskTextInput.text.trim().length > 0
