@@ -34,14 +34,38 @@ Item {
 
     function focusAgenda() {
         agendaView.forceActiveFocus();
-        if (selectedIndex === -1) {
-            selectNextEvent();
+        if (selectedIndex === -1 || getEventIndices().indexOf(selectedIndex) === -1) {
+            selectedIndex = getUpcomingEventIndex();
         }
+        Qt.callLater(() => {
+            if (agendaFlick && !agendaFlick.userScrolled) {
+                agendaFlick.resetToToday();
+            }
+        });
     }
 
     onVisibleChanged: {
         if (visible) {
-            Qt.callLater(() => focusAgenda());
+            if (agendaFlick) agendaFlick.userScrolled = false;
+            selectedIndex = getUpcomingEventIndex();
+            Qt.callLater(() => {
+                focusAgenda();
+                if (agendaFlick) agendaFlick.resetToToday();
+            });
+        }
+    }
+
+    Connections {
+        target: activeStore
+        function onAgendaModelChanged() {
+            if (selectedIndex === -1 || getEventIndices().indexOf(selectedIndex) === -1) {
+                selectedIndex = getUpcomingEventIndex();
+            }
+            Qt.callLater(() => {
+                if (agendaFlick && !agendaFlick.userScrolled) {
+                    agendaFlick.resetToToday();
+                }
+            });
         }
     }
 
@@ -56,11 +80,49 @@ Item {
         return indices;
     }
 
+    function getUpcomingEventIndex() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        var indices = getEventIndices();
+        if (indices.length === 0) return -1;
+
+        // 1. Look for currently active ongoing event ("now")
+        for (var i = 0; i < indices.length; i++) {
+            var item = model[indices[i]];
+            if (item && item.ev && activeStore && activeStore.eventPhase(item.ev) === "now") {
+                return indices[i];
+            }
+        }
+
+        // 2. Look for the next upcoming event ("future")
+        for (var i = 0; i < indices.length; i++) {
+            var item = model[indices[i]];
+            if (item && item.ev && activeStore && activeStore.eventPhase(item.ev) === "future") {
+                return indices[i];
+            }
+        }
+
+        // 3. Look for today's events (even if already ended earlier today)
+        var today = new Date();
+        var todayKey = activeStore ? activeStore.dateKey(today) : -1;
+        for (var i = 0; i < indices.length; i++) {
+            var item = model[indices[i]];
+            if (item && item.ev && activeStore) {
+                var d = activeStore.eventDate(item.ev.start, item.ev.allDay);
+                if (activeStore.dateKey(d) === todayKey) {
+                    return indices[i];
+                }
+            }
+        }
+
+        // 4. Fallback: most recent past event (last event in model)
+        return indices[indices.length - 1];
+    }
+
     function selectNextEvent() {
         var indices = getEventIndices();
         if (indices.length === 0) return;
         if (agendaView.selectedIndex === -1) {
-            agendaView.selectedIndex = indices[0];
+            agendaView.selectedIndex = getUpcomingEventIndex();
             return;
         }
         for (var i = 0; i < indices.length; i++) {
@@ -75,7 +137,7 @@ Item {
         var indices = getEventIndices();
         if (indices.length === 0) return;
         if (agendaView.selectedIndex === -1) {
-            agendaView.selectedIndex = indices[indices.length - 1];
+            agendaView.selectedIndex = getUpcomingEventIndex();
             return;
         }
         for (var i = indices.length - 1; i >= 0; i--) {
@@ -184,6 +246,12 @@ Item {
         }
         if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
             selectPrevEvent();
+            event.accepted = true;
+            return;
+        }
+        if (event.key === Qt.Key_T || event.key === Qt.Key_Home) {
+            agendaView.selectedIndex = getUpcomingEventIndex();
+            if (agendaFlick) agendaFlick.resetToToday();
             event.accepted = true;
             return;
         }

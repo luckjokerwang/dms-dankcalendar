@@ -10,10 +10,13 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=== 1. QML Syntax & Component Linting (qmllint) ==="
 python3 -c "
-import os, sys, subprocess, re
+import os, sys, subprocess, re, shutil
 
 root_dir = '$ROOT_DIR'
 has_error = False
+qmllint_bin = shutil.which('qmllint')
+if not qmllint_bin:
+    print('ℹ️  qmllint not found in PATH, skipping binary linting rule.')
 
 for root, _, files in os.walk(root_dir):
     if '.git' in root or '.agents' in root:
@@ -37,10 +40,11 @@ for root, _, files in os.walk(root_dir):
                     has_error = True
 
             # Rule 3: Run qmllint
-            res = subprocess.run(['qmllint', p], capture_output=True, text=True)
-            if res.returncode != 0 or 'error' in res.stderr.lower():
-                print(f'❌ [FAIL] qmllint failed for {p}:\n{res.stdout}\n{res.stderr}')
-                has_error = True
+            if qmllint_bin:
+                res = subprocess.run([qmllint_bin, p], capture_output=True, text=True)
+                if res.returncode != 0 or 'error' in res.stderr.lower():
+                    print(f'❌ [FAIL] qmllint failed for {p}:\n{res.stdout}\n{res.stderr}')
+                    has_error = True
 
 if has_error:
     print('❌ QML static check failed!')

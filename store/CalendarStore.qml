@@ -15,6 +15,15 @@ Item {
     property int agendaPastDays: constants.defaultAgendaPastDays
     property int agendaFutureDays: constants.defaultAgendaFutureDays
 
+    onAgendaPastDaysChanged: {
+        store.agendaLoading = true;
+        if (!fetchAgendaProc.running) fetchAgendaProc.running = true;
+    }
+    onAgendaFutureDaysChanged: {
+        store.agendaLoading = true;
+        if (!fetchAgendaProc.running) fetchAgendaProc.running = true;
+    }
+
     // State
     property string eventSummary: ""
     property string eventCleanSummary: ""
@@ -241,6 +250,9 @@ Item {
             height += 52;
         }
 
+        if (todayOffset < 0) {
+            todayOffset = Math.max(0, height - 380);
+        }
         store.agendaContentHeight = height;
         store.agendaTodayOffset = Math.max(0, todayOffset);
         return rows;

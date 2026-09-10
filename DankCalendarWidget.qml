@@ -26,7 +26,7 @@ PluginComponent {
         lookAheadDays: pluginData.lookAheadDays || 1
         nowWindowMinutes: pluginData.nowWindowMinutes ?? 5
         agendaPastDays: pluginData.agendaPastDays ?? 7
-        agendaFutureDays: pluginData.agendaFutureDays || 30
+        agendaFutureDays: pluginData.agendaFutureDays ?? 30
     }
 
     TaskStore {
