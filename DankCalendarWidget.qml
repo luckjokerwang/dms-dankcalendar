@@ -442,8 +442,9 @@ PluginComponent {
             function autoFocusInput() {
                 if (!root.isPopoutOpen) return;
                 if (root.activeModule === "ai") {
-                    if (chatViewComp && chatViewComp.focusInput) {
-                        chatViewComp.focusInput();
+                    var chatItem = chatViewLoader.item;
+                    if (chatItem && chatItem.focusInput) {
+                        chatItem.focusInput();
                     }
                 } else if (root.activeModule === "tasks") {
                     if (tasksViewComp && tasksViewComp.focusNewTaskInput) {
@@ -636,28 +637,47 @@ PluginComponent {
                 }
             }
 
-            // 5. AI Assistant View
-            ChatView {
-                id: chatViewComp
+            // 5. AI Assistant View (Lazy Loaded)
+            Loader {
+                id: chatViewLoader
                 visible: root.activeModule === "ai"
-                aiScriptPath: root.aiScriptPath
-                batchScriptPath: root.batchScriptPath
-                sessionScriptPath: root.sessionScriptPath
-                pasteHelperPath: root.pasteHelperPath
-                providerScriptPath: root.providerScriptPath
                 width: parent.width
                 height: visible ? (root.constants ? root.constants.defaultContentHeight : 420) : 0
-                onCloseRequested: {
-                    if (popout.closePopout) popout.closePopout();
+                active: (root.isPopoutOpen && root.activeModule === "ai") || hasEverLoadedAi
+                property bool hasEverLoadedAi: false
+
+                onActiveChanged: {
+                    if (active) hasEverLoadedAi = true;
                 }
-                onSwitchToModule: (mod) => {
-                    globalActiveModule.set(mod);
-                    if (mod === "agenda" || mod === "tasks") globalBarModule.set(mod);
-                    root.requestAutoFocus();
+
+                sourceComponent: Component {
+                    ChatView {
+                        aiScriptPath: root.aiScriptPath
+                        batchScriptPath: root.batchScriptPath
+                        sessionScriptPath: root.sessionScriptPath
+                        pasteHelperPath: root.pasteHelperPath
+                        providerScriptPath: root.providerScriptPath
+                        width: chatViewLoader.width
+                        height: root.constants ? root.constants.defaultContentHeight : 420
+                        onCloseRequested: {
+                            if (popout.closePopout) popout.closePopout();
+                        }
+                        onSwitchToModule: (mod) => {
+                            globalActiveModule.set(mod);
+                            if (mod === "agenda" || mod === "tasks") globalBarModule.set(mod);
+                            root.requestAutoFocus();
+                        }
+                        onScheduleConfirmed: {
+                            root.refreshAll();
+                            syncFollowupTimer.restart();
+                        }
+                    }
                 }
-                onScheduleConfirmed: {
-                    root.refreshAll()
-                    syncFollowupTimer.restart()
+
+                onLoaded: {
+                    if (root.activeModule === "ai" && item && item.focusInput) {
+                        item.focusInput();
+                    }
                 }
             }
         }
