@@ -39,6 +39,7 @@ PluginComponent {
 
     AiStore {
         id: aiStoreItem
+        aiNotificationEnabled: pluginData.aiNotificationEnabled ?? true
         onProposalConfirmed: {
             calendarStoreItem.refreshAll();
             taskStoreItem.fetchTasks();
@@ -592,6 +593,7 @@ PluginComponent {
 
             // 2. Module Selector Tabs (Agenda / Tasks / AI)
             PopoutTabBar {
+                anchors.horizontalCenter: parent.horizontalCenter
                 activeModule: root.activeModule
                 pendingTasksCount: root.taskStore ? root.taskStore.pendingCount : 0
                 onTabSelected: (mod) => {
@@ -657,6 +659,7 @@ PluginComponent {
                         sessionScriptPath: root.sessionScriptPath
                         pasteHelperPath: root.pasteHelperPath
                         providerScriptPath: root.providerScriptPath
+                        aiNotificationEnabled: pluginData.aiNotificationEnabled ?? true
                         width: chatViewLoader.width
                         height: root.constants ? root.constants.defaultContentHeight : 420
                         onCloseRequested: {
