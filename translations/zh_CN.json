@@ -1,0 +1,95 @@
+{
+  "Agenda": {
+    "Agenda": "日程"
+  },
+  "Tasks": {
+    "Tasks": "待办"
+  },
+  "Tasks (%1)": {
+    "Tasks (%1)": "待办 (%1)"
+  },
+  "Assistant": {
+    "Assistant": "助理"
+  },
+  "All Tasks": {
+    "All Tasks": "全部待办"
+  },
+  "Due": {
+    "Due": "到期"
+  },
+  "Due (%1)": {
+    "Due (%1)": "到期 (%1)"
+  },
+  "Add new task...": {
+    "Add new task...": "添加新待办..."
+  },
+  "Add a new task (e.g. Buy milk !1 #work)...": {
+    "Add a new task (e.g. Buy milk !1 #work)...": "添加新待办… (支持 !1 优先级, #标签 分类)"
+  },
+  "Add a new task to #%1... (can omit #tag)": {
+    "Add a new task to #%1... (can omit #tag)": "添加新待办至 #%1… (可省略 #标签)"
+  },
+  "No pending tasks": {
+    "No pending tasks": "暂无待办事项"
+  },
+  "Completed": {
+    "Completed": "已完成"
+  },
+  "Completed (%1)": {
+    "Completed (%1)": "已完成 (%1)"
+  },
+  "Auto Classify": {
+    "Auto Classify": "智能整理"
+  },
+  "AI Auto Classification": {
+    "AI Auto Classification": "AI 智能待办整理"
+  },
+  "Uncategorized tasks detected. Click to auto-tag.": {
+    "Uncategorized tasks detected. Click to auto-tag.": "检测到未分类待办，点击由 AI 智能推理打标"
+  },
+  "High Priority": {
+    "High Priority": "高优"
+  },
+  "Medium Priority": {
+    "Medium Priority": "中优"
+  },
+  "Low Priority": {
+    "Low Priority": "低优"
+  },
+  "Today": {
+    "Today": "今天"
+  },
+  "Tomorrow": {
+    "Tomorrow": "明天"
+  },
+  "All Day": {
+    "All Day": "全天"
+  },
+  "No upcoming events": {
+    "No upcoming events": "暂无近期日程"
+  },
+  "Synchronizing...": {
+    "Synchronizing...": "正在同步..."
+  },
+  "New Event": {
+    "New Event": "新建日程"
+  },
+  "Refresh": {
+    "Refresh": "同步刷新"
+  },
+  "Settings": {
+    "Settings": "设置"
+  },
+  "Toggle Calendar Window": {
+    "Toggle Calendar Window": "打开主日历窗口"
+  },
+  "All Completed": {
+    "All Completed": "全部完成"
+  },
+  "%1 Tasks": {
+    "%1 Tasks": "%1 项待办"
+  },
+  "%1 upcoming": {
+    "%1 upcoming": "%1 项近期日程"
+  }
+}

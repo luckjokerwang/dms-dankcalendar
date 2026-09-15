@@ -92,7 +92,7 @@ Item {
                 }
 
                 StyledText {
-                    text: "日程"
+                    text: I18n.trFor("dankCalendarPlus", "Agenda")
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium
                     color: parent.parent.isCurrent ? Theme.primaryText : Theme.surfaceText
@@ -128,7 +128,9 @@ Item {
                 }
 
                 StyledText {
-                    text: tabBar.pendingTasksCount > 0 ? ("待办 (" + tabBar.pendingTasksCount + ")") : "待办"
+                    text: tabBar.pendingTasksCount > 0
+                        ? I18n.trFor("dankCalendarPlus", "Tasks (%1)").arg(tabBar.pendingTasksCount)
+                        : I18n.trFor("dankCalendarPlus", "Tasks")
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium
                     color: parent.parent.isCurrent ? Theme.primaryText : Theme.surfaceText
@@ -164,7 +166,7 @@ Item {
                 }
 
                 StyledText {
-                    text: "助理"
+                    text: I18n.trFor("dankCalendarPlus", "Assistant")
                     font.pixelSize: Theme.fontSizeSmall
                     font.weight: Font.Medium
                     color: parent.parent.isCurrent ? Theme.primaryText : Theme.surfaceText

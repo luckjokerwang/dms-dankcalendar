@@ -450,8 +450,8 @@ Item {
             leftIconName: "add"
             leftIconSize: 20
             placeholderText: (tasksView.filterTag && tasksView.filterTag !== "__due__")
-                             ? ("添加新待办至 #" + tasksView.filterTag + "… (可省略 #标签)")
-                             : "添加新待办… (支持 !1 优先级, #标签 分类)"
+                             ? I18n.trFor("dankCalendarPlus", "Add a new task to #%1... (can omit #tag)").arg(tasksView.filterTag)
+                             : I18n.trFor("dankCalendarPlus", "Add a new task (e.g. Buy milk !1 #work)...")
             font.pixelSize: Theme.fontSizeMedium
             topPadding: 9
             bottomPadding: 7
@@ -688,7 +688,7 @@ Item {
                     StyledText {
                         id: allTagText
                         anchors.centerIn: parent
-                        text: "全部待办"
+                        text: I18n.trFor("dankCalendarPlus", "All Tasks")
                         font.pixelSize: 11
                         font.weight: tasksView.filterTag === "" ? Font.Bold : Font.Normal
                         color: tasksView.filterTag === "" ? "#ffffff" : Theme.surfaceText
@@ -725,7 +725,7 @@ Item {
                         }
 
                         StyledText {
-                            text: "到期 (" + tasksView.dueTasksCount + ")"
+                            text: I18n.trFor("dankCalendarPlus", "Due (%1)").arg(tasksView.dueTasksCount)
                             font.pixelSize: 11
                             font.weight: dueTagPill.isSelected ? Font.Bold : Font.Normal
                             color: dueTagPill.isSelected ? "#ffffff" : Theme.surfaceText

@@ -38,12 +38,12 @@ Item {
                 var date = calendarStore ? calendarStore.formatLocalDate(new Date(), "dddd, d MMMM") : "";
                 if (activeModule === "tasks") {
                     var pCount = taskStore ? taskStore.pendingTasksCount : 0;
-                    if (pCount === 0) return date + "  ·  全部完成";
-                    return date + "  ·  " + pCount + " 项待办";
+                    if (pCount === 0) return date + "  ·  " + I18n.trFor("dankCalendarPlus", "All Completed");
+                    return date + "  ·  " + I18n.trFor("dankCalendarPlus", "%1 Tasks").arg(pCount);
                 }
                 var upCount = calendarStore ? calendarStore.upcomingCount : 0;
                 if (upCount === 0) return date;
-                return date + "  ·  " + upCount + " upcoming";
+                return date + "  ·  " + I18n.trFor("dankCalendarPlus", "%1 upcoming").arg(upCount);
             }
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText

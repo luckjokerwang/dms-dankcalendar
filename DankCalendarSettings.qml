@@ -1053,6 +1053,13 @@ PluginSettings {
         defaultValue: true
     }
 
+    ToggleSetting {
+        settingKey: "aiNotificationEnabled"
+        label: "AI 助理回复与报错桌面通知"
+        description: "AI 思考回复完毕、生成排程建议或遇到请求错误时，在桌面顶部弹出动态通知提醒（便于后台等待）"
+        defaultValue: true
+    }
+
     SliderSetting {
         settingKey: "pillMaxWidth"
         label: "顶栏胶囊最大宽度"
@@ -1232,8 +1239,9 @@ PluginSettings {
                 }
             }
         }
+    }
 
-        // 4. Keyboard Shortcuts & Wayland Keybind Guide
+    // 4. Keyboard Shortcuts & Wayland Keybind Guide
         StyledText {
             text: "⌨️ 快捷键与按键操作指南"
             font.pixelSize: Theme.fontSizeLarge
@@ -1477,5 +1485,5 @@ PluginSettings {
                 }
             }
         }
-    }
+    
 }

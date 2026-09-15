@@ -18,10 +18,62 @@ Item {
     property bool isGenerating: false
     property string streamingAssistantText: ""
     property var currentProposal: null
+    property bool aiNotificationEnabled: true
 
     signal generationFinished()
     signal proposalConfirmed(var result)
     signal sessionChanged()
+
+    function sendNotification(summary, body, icon) {
+        if (!store.aiNotificationEnabled) return;
+        var s = (summary || "").trim();
+        var b = (body || "").trim();
+        if (!s) return;
+        var ic = icon || "dialog-information";
+        var cmd = [
+            "sh", "-c",
+            'if command -v dms >/dev/null 2>&1; then ' +
+            '  dms notify "$1" "$2" --app "Dank Calendar Plus" --icon "$3"; ' +
+            'elif command -v notify-send >/dev/null 2>&1; then ' +
+            '  notify-send -a "Dank Calendar Plus" -i "$3" "$1" "$2"; ' +
+            'fi',
+            "sh", s, b, ic
+        ];
+        Quickshell.execDetached(cmd);
+    }
+
+    function notifyAssistantReply(text, proposal) {
+        if (!store.aiNotificationEnabled) return;
+        var hasProposal = proposal && ((proposal.events && proposal.events.length > 0) || (proposal.tasks && proposal.tasks.length > 0));
+        if (hasProposal) {
+            var evCount = (proposal.events && Array.isArray(proposal.events)) ? proposal.events.length : 0;
+            var taskCount = (proposal.tasks && Array.isArray(proposal.tasks)) ? proposal.tasks.length : 0;
+            var parts = [];
+            if (evCount > 0) parts.push(evCount + " 项日程");
+            if (taskCount > 0) parts.push(taskCount + " 项待办");
+
+            var sample = "";
+            if (evCount > 0 && proposal.events[0] && proposal.events[0].summary) {
+                sample = proposal.events[0].summary;
+            } else if (taskCount > 0 && proposal.tasks[0] && proposal.tasks[0].summary) {
+                sample = proposal.tasks[0].summary;
+            }
+
+            var body = "已规划 " + parts.join("、") + (sample ? ("：包含「" + sample + "」等") : "");
+            store.sendNotification("📅 排程建议已就绪", body, "dialog-information");
+        } else {
+            var raw = (text || "").trim();
+            var clean = raw.replace(/```[\s\S]*?```/g, "");
+            clean = clean.replace(/^#+\s+/gm, "");
+            clean = clean.replace(/[*_~`]/g, "");
+            clean = clean.replace(/\s+/g, " ").trim();
+            if (clean.length > 80) {
+                clean = clean.slice(0, 80) + "...";
+            }
+            if (!clean) clean = "回复已生成，点击查看详情";
+            store.sendNotification("🤖 AI 助手已回复", clean, "dialog-information");
+        }
+    }
 
     // 1. Stream Process (Streaming SSE chunks)
     Process {
@@ -51,18 +103,21 @@ Item {
                         store.streamingAssistantText = "";
                         store.isGenerating = false;
                         store.saveCurrentSession();
+                        store.notifyAssistantReply(full, prop);
                         store.generationFinished();
                     } else if (obj.type === "error") {
+                        var errMsg = obj.message || "未知错误";
                         var errMsgs = store.messages.slice();
                         errMsgs.push({
                             role: "system",
-                            content: "❌ 请求失败: " + (obj.message || "未知错误"),
+                            content: "❌ 请求失败: " + errMsg,
                             timestamp: new Date().toISOString()
                         });
                         store.messages = errMsgs;
                         store.streamingAssistantText = "";
                         store.isGenerating = false;
                         store.saveCurrentSession();
+                        store.sendNotification("❌ AI 助手请求失败", errMsg, "dialog-error");
                         store.generationFinished();
                     }
                 } catch (e) {}
@@ -72,14 +127,16 @@ Item {
             if (store.isGenerating) {
                 store.isGenerating = false;
                 store.streamingAssistantText = "";
+                var interruptMsg = "⚠️ 连接已中断 (退出码: " + code + ")，请检查服务商 API 端点或密匙配置";
                 var msgs = store.messages.slice();
                 msgs.push({
                     role: "system",
-                    content: "⚠️ 连接已中断 (退出码: " + code + ")，请检查服务商 API 端点或密匙配置",
+                    content: interruptMsg,
                     timestamp: new Date().toISOString()
                 });
                 store.messages = msgs;
                 store.saveCurrentSession();
+                store.sendNotification("⚠️ AI 助手连接中断", interruptMsg, "dialog-warning");
                 store.generationFinished();
             }
         }
@@ -153,6 +210,10 @@ Item {
                             store.messages = msgs;
                             store.saveCurrentSession();
                         }
+                        var evCount = (res.data && res.data.events && Array.isArray(res.data.events)) ? res.data.events.length : 0;
+                        var taskCount = (res.data && res.data.tasks && Array.isArray(res.data.tasks)) ? res.data.tasks.length : 0;
+                        var detail = "已写入 " + (evCount > 0 ? (evCount + " 项日程") : "") + (evCount > 0 && taskCount > 0 ? "、" : "") + (taskCount > 0 ? (taskCount + " 项待办") : "");
+                        store.sendNotification("✅ 排程已写入清单", detail, "emblem-default");
                         store.proposalConfirmed(res.data);
                     }
                 } catch (e) {}

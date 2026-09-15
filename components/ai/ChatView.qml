@@ -60,8 +60,60 @@ StyledRect {
     }
 
     // Dynamic Providers & Models from ~/.config/dms-ai/providers.json
+    property bool aiNotificationEnabled: true
     property var configuredProviders: []
     property string activeProviderId: "agnes"
+
+    function sendNotification(summary, body, icon) {
+        if (!root.aiNotificationEnabled) return
+        var s = (summary || "").trim()
+        var b = (body || "").trim()
+        if (!s) return
+        var ic = icon || "dialog-information"
+        var cmd = [
+            "sh", "-c",
+            'if command -v dms >/dev/null 2>&1; then ' +
+            '  dms notify "$1" "$2" --app "Dank Calendar Plus" --icon "$3"; ' +
+            'elif command -v notify-send >/dev/null 2>&1; then ' +
+            '  notify-send -a "Dank Calendar Plus" -i "$3" "$1" "$2"; ' +
+            'fi',
+            "sh", s, b, ic
+        ]
+        Quickshell.execDetached(cmd)
+    }
+
+    function notifyAssistantReply(text, proposal) {
+        if (!root.aiNotificationEnabled) return
+        var hasProposal = proposal && ((proposal.events && proposal.events.length > 0) || (proposal.tasks && proposal.tasks.length > 0))
+        if (hasProposal) {
+            var evCount = (proposal.events && Array.isArray(proposal.events)) ? proposal.events.length : 0
+            var taskCount = (proposal.tasks && Array.isArray(proposal.tasks)) ? proposal.tasks.length : 0
+            var parts = []
+            if (evCount > 0) parts.push(evCount + " 项日程")
+            if (taskCount > 0) parts.push(taskCount + " 项待办")
+
+            var sample = ""
+            if (evCount > 0 && proposal.events[0] && proposal.events[0].summary) {
+                sample = proposal.events[0].summary
+            } else if (taskCount > 0 && proposal.tasks[0] && proposal.tasks[0].summary) {
+                sample = proposal.tasks[0].summary
+            }
+
+            var body = "已规划 " + parts.join("、") + (sample ? ("：包含「" + sample + "」等") : "")
+            sendNotification("📅 排程建议已就绪", body, "dialog-information")
+        } else {
+            var raw = (text || "").trim()
+            var clean = raw.replace(/```[\s\S]*?```/g, "")
+            clean = clean.replace(/^#+\s+/gm, "")
+            clean = clean.replace(/[*_~`]/g, "")
+            clean = clean.replace(/\s+/g, " ").trim()
+            if (clean.length > 80) {
+                clean = clean.slice(0, 80) + "..."
+            }
+            if (!clean) clean = "回复已生成，点击查看详情"
+            sendNotification("🤖 AI 助手已回复", clean, "dialog-information")
+        }
+    }
 
     function loadProvidersConfig() {
         var script = providerScriptPath || "provider-manager"
@@ -455,6 +507,7 @@ StyledRect {
                     root.finishGeneration(root.currentSessionTitle, root.currentProposal || root.extractProposalFromText(root.streamingAssistantText))
                 } else {
                     root.isGenerating = false
+                    root.handleError(exitCode, "⚠️ 连接异常中断 (退出码: " + exitCode + ")，请检查网络或模型服务商配置。")
                 }
             }
         }
@@ -465,13 +518,13 @@ StyledRect {
             aiProc.running = false
         }
         if (streamingAssistantText) {
-            finishGeneration(currentSessionTitle, currentProposal || extractProposalFromText(streamingAssistantText))
+            finishGeneration(currentSessionTitle, currentProposal || extractProposalFromText(streamingAssistantText), true)
         } else {
             isGenerating = false
         }
     }
 
-    function finishGeneration(sessionTitle, proposal) {
+    function finishGeneration(sessionTitle, proposal, isManualStop) {
         if (sessionTitle && (currentSessionTitle === "新排程会话" || currentSessionTitle === "未命名会话" || currentSessionTitle.length <= 4)) {
             currentSessionTitle = sessionTitle
         }
@@ -484,6 +537,11 @@ StyledRect {
             timestamp: new Date().toISOString()
         })
         messages = newMsgs
+
+        if (!isManualStop) {
+            notifyAssistantReply(streamingAssistantText, finalProposal)
+        }
+
         streamingAssistantText = ""
         currentProposal = null
         isGenerating = false
@@ -491,14 +549,18 @@ StyledRect {
     }
 
     function handleError(code, errMsg) {
+        var errContent = errMsg || "发生未知错误，请检查网络或 API Key 设置。"
         var newMsgs = messages.slice()
         newMsgs.push({
             role: "assistant",
-            content: errMsg || "发生未知错误，请检查网络或 API Key 设置。",
+            content: errContent,
             error: true,
             timestamp: new Date().toISOString()
         })
         messages = newMsgs
+
+        sendNotification("❌ AI 助手请求失败", errContent, "dialog-error")
+
         streamingAssistantText = ""
         currentProposal = null
         isGenerating = false
@@ -1187,6 +1249,10 @@ StyledRect {
                             onConfirmed: (updatedProposal) => {
                                 root.updateMessageProposal(index, updatedProposal)
                                 root.scheduleConfirmed()
+                                var evCount = (updatedProposal && updatedProposal.events && Array.isArray(updatedProposal.events)) ? updatedProposal.events.length : 0
+                                var taskCount = (updatedProposal && updatedProposal.tasks && Array.isArray(updatedProposal.tasks)) ? updatedProposal.tasks.length : 0
+                                var detail = "已写入 " + (evCount > 0 ? (evCount + " 项日程") : "") + (evCount > 0 && taskCount > 0 ? "、" : "") + (taskCount > 0 ? (taskCount + " 项待办") : "")
+                                root.sendNotification("✅ 排程已写入清单", detail, "emblem-default")
                             }
                         }
                     }

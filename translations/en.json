@@ -1,0 +1,95 @@
+{
+  "Agenda": {
+    "Agenda": "Agenda"
+  },
+  "Tasks": {
+    "Tasks": "Tasks"
+  },
+  "Tasks (%1)": {
+    "Tasks (%1)": "Tasks (%1)"
+  },
+  "Assistant": {
+    "Assistant": "Assistant"
+  },
+  "All Tasks": {
+    "All Tasks": "All Tasks"
+  },
+  "Due": {
+    "Due": "Due"
+  },
+  "Due (%1)": {
+    "Due (%1)": "Due (%1)"
+  },
+  "Add new task...": {
+    "Add new task...": "Add new task..."
+  },
+  "Add a new task (e.g. Buy milk !1 #work)...": {
+    "Add a new task (e.g. Buy milk !1 #work)...": "Add a new task (e.g. Buy milk !1 #work)..."
+  },
+  "Add a new task to #%1... (can omit #tag)": {
+    "Add a new task to #%1... (can omit #tag)": "Add new task to #%1... (can omit #tag)"
+  },
+  "No pending tasks": {
+    "No pending tasks": "No pending tasks"
+  },
+  "Completed": {
+    "Completed": "Completed"
+  },
+  "Completed (%1)": {
+    "Completed (%1)": "Completed (%1)"
+  },
+  "Auto Classify": {
+    "Auto Classify": "Auto Classify"
+  },
+  "AI Auto Classification": {
+    "AI Auto Classification": "AI Auto Classification"
+  },
+  "Uncategorized tasks detected. Click to auto-tag.": {
+    "Uncategorized tasks detected. Click to auto-tag.": "Uncategorized tasks detected. Click to auto-tag."
+  },
+  "High Priority": {
+    "High Priority": "High Priority"
+  },
+  "Medium Priority": {
+    "Medium Priority": "Medium Priority"
+  },
+  "Low Priority": {
+    "Low Priority": "Low Priority"
+  },
+  "Today": {
+    "Today": "Today"
+  },
+  "Tomorrow": {
+    "Tomorrow": "Tomorrow"
+  },
+  "All Day": {
+    "All Day": "All Day"
+  },
+  "No upcoming events": {
+    "No upcoming events": "No upcoming events"
+  },
+  "Synchronizing...": {
+    "Synchronizing...": "Synchronizing..."
+  },
+  "New Event": {
+    "New Event": "New Event"
+  },
+  "Refresh": {
+    "Refresh": "Refresh"
+  },
+  "Settings": {
+    "Settings": "Settings"
+  },
+  "Toggle Calendar Window": {
+    "Toggle Calendar Window": "Toggle Calendar Window"
+  },
+  "All Completed": {
+    "All Completed": "All Completed"
+  },
+  "%1 Tasks": {
+    "%1 Tasks": "%1 Tasks"
+  },
+  "%1 upcoming": {
+    "%1 upcoming": "%1 upcoming"
+  }
+}
