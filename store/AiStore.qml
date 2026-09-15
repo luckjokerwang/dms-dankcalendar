@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Common
+import qs.Services
 
 Item {
     id: store
@@ -30,6 +31,20 @@ Item {
         var b = (body || "").trim();
         if (!s) return;
         var ic = icon || "dialog-information";
+
+        // 1. DMS 原生高亮悬浮 Toast 弹窗（屏幕前台 100% 弹出，不受通知过滤器抑制）
+        if (typeof ToastService !== "undefined" && ToastService) {
+            var toastMsg = s + (b ? ("：" + b) : "");
+            if (ic === "dialog-error") {
+                if (typeof ToastService.showError === "function") ToastService.showError(toastMsg, b);
+            } else if (ic === "dialog-warning") {
+                if (typeof ToastService.showWarning === "function") ToastService.showWarning(toastMsg, b);
+            } else {
+                if (typeof ToastService.showInfo === "function") ToastService.showInfo(toastMsg, b);
+            }
+        }
+
+        // 2. 传统 Freedesktop DBus 通知（写入系统通知中心历史留存）
         var cmd = [
             "sh", "-c",
             'if command -v dms >/dev/null 2>&1; then ' +
@@ -53,10 +68,10 @@ Item {
             if (taskCount > 0) parts.push(taskCount + " 项待办");
 
             var sample = "";
-            if (evCount > 0 && proposal.events[0] && proposal.events[0].summary) {
-                sample = proposal.events[0].summary;
-            } else if (taskCount > 0 && proposal.tasks[0] && proposal.tasks[0].summary) {
-                sample = proposal.tasks[0].summary;
+            if (evCount > 0 && proposal.events[0]) {
+                sample = proposal.events[0].title || proposal.events[0].summary || "";
+            } else if (taskCount > 0 && proposal.tasks[0]) {
+                sample = proposal.tasks[0].summary || proposal.tasks[0].title || "";
             }
 
             var body = "已规划 " + parts.join("、") + (sample ? ("：包含「" + sample + "」等") : "");

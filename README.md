@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.16-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.17-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -38,6 +38,8 @@
 - **自然语言与快捷指令**：键入 `/` 快速调出内置指令面板（如快速规划明天下单、整理全天待办、查询空闲时间）。
 - **截图 OCR 快速提取**：按下 `Ctrl+V` 或点击附件按钮一键粘贴系统剪贴板截图，AI 自动识别图片中的会议、课表、待办事项并格式化排程。
 - **交互式确认卡片**：AI 输出结构化排程建议，支持勾选/取消单个日程或待办，点击一键批量写入系统，**自动触发后端同步与两段式防漏刷新**。
+- **主流自适应多行输入框**：支持单行紧凑起步（38px），随输入与 `Shift+Enter` 弹性自适应撑高（最高 130px 约 5~6 行），超出启用平滑纵向滚动，`Enter` 一键发送并平滑复位收缩至单行；深度适配 DMS 原生主题光标（`DankTextCursor`）。
+- **双轨悬浮 Toast 桌面弹窗通知**：AI 回复生成、排程就绪或请求失败时，通过 DMS 原生最高优先级 `ToastService` 保证在屏幕前台 100% 滑出高亮悬浮胶囊，并同步沉淀到系统通知中心历史中。
 - **深度交互打磨**：
   - 支持 **一键复制** 与鼠标自由划词复制；
   - 支持 **`↑ / ↓` 方向键** 快速回溯历史提问需求（ChatGPT / 终端级丝滑体验）；
@@ -94,6 +96,8 @@
 | **弹窗内 `Ctrl + R`** | 即刻同步刷新日历与待办数据 |
 | **弹窗内 `Esc`** | 快速关闭主弹窗 |
 | **AI 助理 `Ctrl+V`** | 自动提取并上传剪贴板图片/截图进行 AI 识图排程 |
+| **AI 输入框 `Shift + Enter`** | 插入换行符并自适应撑高展开输入框 |
+| **AI 输入框 `Enter`** | 发送当前输入内容并平滑复位收缩为单行（生成中按回车可直接中断） |
 | **AI 输入框 `↑ / ↓`** | 快速向上/向下切换回溯历史输入的 Prompt 提示词 |
 
 ---

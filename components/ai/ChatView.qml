@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Widgets
 import qs.Modals.FileBrowser
+import qs.Services
 
 StyledRect {
     id: root
@@ -70,6 +71,20 @@ StyledRect {
         var b = (body || "").trim()
         if (!s) return
         var ic = icon || "dialog-information"
+
+        // 1. DMS 原生高亮悬浮 Toast 弹窗（屏幕中央/前台百分之百弹出，无视图层过滤与勿扰阻断）
+        if (typeof ToastService !== "undefined" && ToastService) {
+            var toastMsg = s + (b ? ("：" + b) : "");
+            if (ic === "dialog-error") {
+                if (typeof ToastService.showError === "function") ToastService.showError(toastMsg, b);
+            } else if (ic === "dialog-warning") {
+                if (typeof ToastService.showWarning === "function") ToastService.showWarning(toastMsg, b);
+            } else {
+                if (typeof ToastService.showInfo === "function") ToastService.showInfo(toastMsg, b);
+            }
+        }
+
+        // 2. 传统 Freedesktop DBus 通知（写入系统通知中心历史留存）
         var cmd = [
             "sh", "-c",
             'if command -v dms >/dev/null 2>&1; then ' +
@@ -93,10 +108,10 @@ StyledRect {
             if (taskCount > 0) parts.push(taskCount + " 项待办")
 
             var sample = ""
-            if (evCount > 0 && proposal.events[0] && proposal.events[0].summary) {
-                sample = proposal.events[0].summary
-            } else if (taskCount > 0 && proposal.tasks[0] && proposal.tasks[0].summary) {
-                sample = proposal.tasks[0].summary
+            if (evCount > 0 && proposal.events[0]) {
+                sample = proposal.events[0].title || proposal.events[0].summary || ""
+            } else if (taskCount > 0 && proposal.tasks[0]) {
+                sample = proposal.tasks[0].summary || proposal.tasks[0].title || ""
             }
 
             var body = "已规划 " + parts.join("、") + (sample ? ("：包含「" + sample + "」等") : "")
@@ -113,6 +128,13 @@ StyledRect {
             if (!clean) clean = "回复已生成，点击查看详情"
             sendNotification("🤖 AI 助手已回复", clean, "dialog-information")
         }
+    }
+
+    function cleanDisplayContent(content, hasProposal) {
+        if (!content) return ""
+        if (!hasProposal) return content
+        var cleaned = content.replace(/```(?:json:schedule|schedule|json)[\s\S]*?```/g, "").trim()
+        return cleaned
     }
 
     function loadProvidersConfig() {
@@ -1216,8 +1238,10 @@ StyledRect {
                         }
 
                         StyledRect {
+                            id: aBubble
                             Layout.fillWidth: true
-                            implicitHeight: aText.implicitHeight + Theme.spacingM * 2
+                            visible: aText.text.length > 0
+                            implicitHeight: Math.max(36, aText.implicitHeight + Theme.spacingM * 2)
                             color: modelData.error ? "#ffebee" : Theme.surfaceContainerHigh
                             radius: 14
                             border.width: modelData.error ? 1 : 0
@@ -1225,9 +1249,11 @@ StyledRect {
 
                             TextEdit {
                                 id: aText
-                                anchors.fill: parent
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
                                 anchors.margins: Theme.spacingM
-                                text: modelData.content || ""
+                                text: root.cleanDisplayContent(modelData.content, !!modelData.proposal)
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: modelData.error ? "#c62828" : Theme.surfaceText
                                 wrapMode: TextEdit.WrapAnywhere
@@ -1309,8 +1335,10 @@ StyledRect {
 
                 // Streaming Assistant Response
                 footer: ColumnLayout {
+                    id: streamFooter
                     width: msgListView.width
                     visible: root.isGenerating
+                    height: visible ? implicitHeight : 0
                     spacing: Theme.spacingXS
 
                     RowLayout {
@@ -1332,15 +1360,27 @@ StyledRect {
 
                     StyledRect {
                         Layout.fillWidth: true
-                        implicitHeight: streamingText.implicitHeight + Theme.spacingM * 2
+                        implicitHeight: Math.max(36, streamingText.implicitHeight + Theme.spacingM * 2)
                         color: Theme.surfaceContainerHigh
                         radius: 14
 
                         TextEdit {
                             id: streamingText
-                            anchors.fill: parent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.margins: Theme.spacingM
-                            text: root.streamingAssistantText + " ▍"
+                            text: {
+                                var raw = root.streamingAssistantText;
+                                if (!raw) return "排程助理正在构思中... ▍";
+                                var idx = raw.indexOf("```json:schedule");
+                                if (idx === -1) idx = raw.indexOf("```schedule");
+                                if (idx !== -1) {
+                                    var prefix = raw.substring(0, idx).trim();
+                                    return (prefix ? (prefix + "\n\n") : "") + "📋 正在生成排程建议卡片... ▍";
+                                }
+                                return raw + " ▍";
+                            }
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.surfaceText
                             wrapMode: TextEdit.WrapAnywhere
@@ -1621,145 +1661,191 @@ StyledRect {
                         }
                     }
 
-                    // Main Text Input Field
-                    DankTextField {
-                        id: chatInputField
+                    // Main Adaptive Multi-Line Text Input Area (ChatGPT / Claude Style)
+                    ScrollView {
+                        id: inputScrollView
                         Layout.fillWidth: true
-                        placeholderText: "输入排程需求、按 Ctrl+V 粘贴截图或输入 / 选用指令..."
-                        focus: true
+                        // Single-line default 38px, auto-expands up to 130px (~5-6 lines), then scrolls smoothly
+                        implicitHeight: Math.min(130, Math.max(38, chatInputField.contentHeight + 16))
+                        clip: true
 
-                        onTextChanged: {
-                            if (root.isLikelyFilePath(text)) {
-                                var fpath = text.trim().replace(/^file:\/\//, "")
-                                var lower = fpath.toLowerCase()
-                                if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
-                                    root.attachedImagePath = fpath
-                                } else {
-                                    root.attachedFilePath = fpath
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        ScrollBar.vertical.policy: (chatInputField.contentHeight + 16 > 130) ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+
+                        TextArea {
+                            id: chatInputField
+                            width: inputScrollView.availableWidth
+                            placeholderText: "输入排程需求、按 Shift+Enter 换行或输入 / 选用指令..."
+                            placeholderTextColor: Theme.surfaceVariantText || Theme.outline
+                            wrapMode: TextEdit.Wrap
+                            focus: true
+                            textFormat: TextEdit.PlainText
+                            selectByMouse: true
+                            font.pixelSize: Theme.fontSizeNormal || 13
+                            font.family: Theme.fontFamily
+                            color: Theme.surfaceText
+                            selectionColor: Theme.primaryContainer
+                            selectedTextColor: Theme.primary
+                            background: null
+                            topPadding: 8
+                            bottomPadding: 8
+                            leftPadding: 8
+                            rightPadding: 8
+
+                            cursorDelegate: DankTextCursor {
+                                id: chatCursor
+                                color: Theme.primary
+                                x: chatInputField.cursorRectangle.x
+                                y: chatInputField.cursorRectangle.y
+                                height: chatInputField.cursorRectangle.height
+                                shown: chatInputField.cursorVisible && chatInputField.activeFocus
+
+                                Connections {
+                                    target: chatInputField
+                                    function onCursorPositionChanged() {
+                                        chatCursor.resetBlink();
+                                    }
+                                    function onTextChanged() {
+                                        chatCursor.resetBlink();
+                                    }
                                 }
-                                text = ""
-                                return
                             }
 
-                            if (text.startsWith("/")) {
-                                root.showCommandPalette = true
-                                var clean = text.substring(1).trim()
-                                if (clean.startsWith("history")) {
-                                    commandPalette.enterMode("history", clean.substring(7).trim())
-                                } else if (clean.startsWith("model")) {
-                                    commandPalette.enterMode("model", clean.substring(5).trim())
-                                } else if (clean.startsWith("provider")) {
-                                    commandPalette.enterMode("provider", clean.substring(8).trim())
-                                } else {
-                                    commandPalette.enterMode("root", clean)
+                            onTextChanged: {
+                                if (root.isLikelyFilePath(text)) {
+                                    var fpath = text.trim().replace(/^file:\/\//, "")
+                                    var lower = fpath.toLowerCase()
+                                    if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
+                                        root.attachedImagePath = fpath
+                                    } else {
+                                        root.attachedFilePath = fpath
+                                    }
+                                    text = ""
+                                    return
                                 }
-                            } else {
-                                root.showCommandPalette = false
-                            }
-                        }
 
-                        Keys.onPressed: (event) => {
-                            if (event.key === Qt.Key_Escape) {
-                                if (root.showCommandPalette) {
-                                    root.showCommandPalette = false;
+                                if (text.startsWith("/")) {
+                                    root.showCommandPalette = true
+                                    var clean = text.substring(1).trim()
+                                    if (clean.startsWith("history")) {
+                                        commandPalette.enterMode("history", clean.substring(7).trim())
+                                    } else if (clean.startsWith("model")) {
+                                        commandPalette.enterMode("model", clean.substring(5).trim())
+                                    } else if (clean.startsWith("provider")) {
+                                        commandPalette.enterMode("provider", clean.substring(8).trim())
+                                    } else {
+                                        commandPalette.enterMode("root", clean)
+                                    }
+                                } else {
+                                    root.showCommandPalette = false
+                                }
+                            }
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Escape) {
+                                    if (root.showCommandPalette) {
+                                        root.showCommandPalette = false;
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (root.isGenerating) {
+                                        root.stopGeneration();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    root.closeRequested();
                                     event.accepted = true;
                                     return;
                                 }
-                                root.closeRequested();
-                                event.accepted = true;
-                                return;
-                            }
 
-                            var isCtrl = (event.modifiers & Qt.ControlModifier);
-                            if (isCtrl && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
-                                var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
-                                root.switchToModule(forward ? "agenda" : "tasks");
-                                event.accepted = true;
-                                return;
-                            }
-                            if (isCtrl && event.key === Qt.Key_1) {
-                                root.switchToModule("agenda");
-                                event.accepted = true;
-                                return;
-                            }
-                            if (isCtrl && event.key === Qt.Key_2) {
-                                root.switchToModule("tasks");
-                                event.accepted = true;
-                                return;
-                            }
-                            if (isCtrl && event.key === Qt.Key_3) {
-                                root.switchToModule("ai");
-                                event.accepted = true;
-                                return;
-                            }
+                                var isCtrl = (event.modifiers & Qt.ControlModifier);
+                                if (isCtrl && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                                    var forward = (event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier));
+                                    root.switchToModule(forward ? "agenda" : "tasks");
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (isCtrl && event.key === Qt.Key_1) {
+                                    root.switchToModule("agenda");
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (isCtrl && event.key === Qt.Key_2) {
+                                    root.switchToModule("tasks");
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (isCtrl && event.key === Qt.Key_3) {
+                                    root.switchToModule("ai");
+                                    event.accepted = true;
+                                    return;
+                                }
 
-                            if (event.key === Qt.Key_V && isCtrl) {
-                                event.accepted = true
-                                root.triggerPasteClipboard()
-                                return
-                            }
-
-                            if (root.showCommandPalette) {
-                                if (commandPalette.handleKey(event)) {
+                                if (event.key === Qt.Key_V && isCtrl) {
+                                    event.accepted = true
+                                    root.triggerPasteClipboard()
                                     return
                                 }
-                            }
 
-                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                if (event.modifiers & Qt.ShiftModifier) {
-                                    // Shift+Enter
-                                } else {
-                                    event.accepted = true
-                                    if (root.isGenerating) {
-                                        root.stopGeneration()
-                                    } else {
-                                        root.sendMessage(text)
+                                if (root.showCommandPalette) {
+                                    if (commandPalette.handleKey(event)) {
+                                        return
                                     }
                                 }
-                            } else if (event.key === Qt.Key_Up) {
-                                if (!root.showCommandPalette) {
-                                    if (root.inputHistory.length > 0) {
-                                        if (root.inputHistoryIndex === -1) {
-                                            root.temporaryDraft = chatInputField.text
+
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    if (event.modifiers & Qt.ShiftModifier) {
+                                        // Shift+Enter: 插入换行符并自适应撑高
+                                        chatInputField.insert(chatInputField.cursorPosition, "\n");
+                                        event.accepted = true;
+                                    } else {
+                                        // Enter: 发送消息或中断生成
+                                        event.accepted = true;
+                                        if (root.isGenerating) {
+                                            root.stopGeneration();
+                                        } else {
+                                            root.sendMessage(chatInputField.text);
                                         }
-                                        if (root.inputHistoryIndex < root.inputHistory.length - 1) {
-                                            root.inputHistoryIndex++
+                                    }
+                                    return;
+                                }
+
+                                if (event.key === Qt.Key_Up) {
+                                    // 仅当位于第一行或单行未换行时触发历史记录回溯
+                                    if (!root.showCommandPalette && (cursorPosition === 0 || !text.includes("\n"))) {
+                                        if (root.inputHistory.length > 0) {
+                                            if (root.inputHistoryIndex === -1) {
+                                                root.temporaryDraft = chatInputField.text
+                                            }
+                                            if (root.inputHistoryIndex < root.inputHistory.length - 1) {
+                                                root.inputHistoryIndex++
+                                                chatInputField.text = root.inputHistory[root.inputHistoryIndex]
+                                                event.accepted = true
+                                                return
+                                            }
+                                        }
+                                    }
+                                } else if (event.key === Qt.Key_Down) {
+                                    // 仅当位于最后一行或单行未换行时触发历史记录前进
+                                    if (!root.showCommandPalette && (cursorPosition === text.length || !text.includes("\n"))) {
+                                        if (root.inputHistoryIndex > 0) {
+                                            root.inputHistoryIndex--
                                             chatInputField.text = root.inputHistory[root.inputHistoryIndex]
+                                            event.accepted = true
+                                            return
+                                        } else if (root.inputHistoryIndex === 0) {
+                                            root.inputHistoryIndex = -1
+                                            chatInputField.text = root.temporaryDraft
                                             event.accepted = true
                                             return
                                         }
                                     }
-                                }
-                            } else if (event.key === Qt.Key_Down) {
-                                if (!root.showCommandPalette) {
-                                    if (root.inputHistoryIndex > 0) {
-                                        root.inputHistoryIndex--
-                                        chatInputField.text = root.inputHistory[root.inputHistoryIndex]
-                                        event.accepted = true
-                                        return
-                                    } else if (root.inputHistoryIndex === 0) {
-                                        root.inputHistoryIndex = -1
-                                        chatInputField.text = root.temporaryDraft
-                                        event.accepted = true
-                                        return
-                                    }
-                                }
-                            } else if (event.key === Qt.Key_N && (event.modifiers & Qt.ControlModifier)) {
-                                event.accepted = true
-                                root.initNewSession()
-                            } else if (event.key === Qt.Key_H && (event.modifiers & Qt.ControlModifier)) {
-                                event.accepted = true
-                                root.showDrawer = !root.showDrawer
-                            } else if (event.key === Qt.Key_Escape) {
-                                if (root.isGenerating) {
+                                } else if (event.key === Qt.Key_N && isCtrl) {
                                     event.accepted = true
-                                    root.stopGeneration()
-                                } else if (root.showDrawer) {
+                                    root.initNewSession()
+                                } else if (event.key === Qt.Key_H && isCtrl) {
                                     event.accepted = true
-                                    root.showDrawer = false
-                                } else if (root.showModelMenu) {
-                                    event.accepted = true
-                                    root.showModelMenu = false
+                                    root.showDrawer = !root.showDrawer
                                 }
                             }
                         }
