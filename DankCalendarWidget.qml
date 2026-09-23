@@ -362,6 +362,38 @@ PluginComponent {
             }
         }
     }
+    function openPluginSettingsWindow() {
+        if (root.closePopout) {
+            root.closePopout();
+        }
+        try {
+            if (typeof PopoutService !== "undefined" && PopoutService) {
+                if (PopoutService.settingsModal && typeof PopoutService.settingsModal.openPluginSettings === "function") {
+                    PopoutService.settingsModal.openPluginSettings("dankCalendarPlus");
+                    PopoutService.settingsModal.show();
+                    return;
+                }
+                if (typeof PopoutService.openSettingsWithTab === "function") {
+                    PopoutService.openSettingsWithTab("plugins");
+                    var retries = 0;
+                    var pollSettingsModal = function() {
+                        if (PopoutService.settingsModal && typeof PopoutService.settingsModal.openPluginSettings === "function") {
+                            PopoutService.settingsModal.openPluginSettings("dankCalendarPlus");
+                            PopoutService.settingsModal.show();
+                        } else if (++retries < 15) {
+                            Qt.callLater(pollSettingsModal);
+                        }
+                    };
+                    Qt.callLater(pollSettingsModal);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log("[DankCalendar] Failed to invoke PopoutService directly:", e);
+        }
+        Quickshell.execDetached(["dms", "ipc", "call", "settings", "openWith", "plugins"]);
+    }
+
     IpcHandler {
         target: "dankCalendarPlus"
 
@@ -419,7 +451,11 @@ PluginComponent {
             }
         }
 
-        // 3. Data Refresh
+        // 3. Settings & Data Refresh
+        function openSettings() {
+            root.openPluginSettingsWindow();
+        }
+
         function refresh() {
             root.refreshAll();
         }
@@ -579,7 +615,7 @@ PluginComponent {
                 }
                 onRefreshRequested: root.refreshAll()
                 onSettingsRequested: {
-                    Quickshell.execDetached(["dms", "settings", "dankCalendarPlus"]);
+                    root.openPluginSettingsWindow();
                     if (popout.closePopout) popout.closePopout();
                 }
                 onCloseRequested: {

@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.17-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.18-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -74,7 +74,7 @@
 - **轮播展示开关**：可开启日程与待办定时自动轮播。
 - **历史与未来跨度**：自定义日程回溯天数与未来预览天数。
 - **模型服务配置**：支持在图形设置界面中完成模型测试、激活切换与参数调整。
-- **Niri / IPC 快捷键配置指南**：设置界面内嵌快捷键配置生成与一键复制。
+- **全功能快捷键速查表与 Wayland 合成器配置**：设置页面内嵌卡片化操作速查指南 (Cheat Sheet Dashboard)，支持一键折叠展开，支持 Niri / Hyprland 全局快捷键一键复制与设置即刻唤起。
 
 ---
 
@@ -86,6 +86,7 @@
 | **左键点击顶栏胶囊主体** | 打开 / 收起 沉浸式浮动弹窗 (Popout) |
 | **中键点击顶栏胶囊** | 快速调出 DankCalendar 主应用程序窗口 |
 | **右键点击胶囊 / 点击 ↻** | 触发底层账户全量同步（`dcal ipc accounts.refresh`），带 360° GPU 加速旋转动效 |
+| **弹窗 ⚙️ 按钮 / IPC openSettings** | 打开插件设置并直达快捷键速查仪表盘（`dms ipc call dankCalendarPlus openSettings`） |
 | **弹窗 `+` 按钮** | 在 DankCalendar 中打开新建事件界面 |
 | **待办输入框回车** | 快速创建待办（支持输入 `!1` 设为高优，当前分类下自动继承标签） |
 | **弹窗内 `1 / 2 / 3`** | 快速切换【日程】/【待办】/【助理】Tab 页面（亦支持 `Ctrl+1 / 2 / 3`） |

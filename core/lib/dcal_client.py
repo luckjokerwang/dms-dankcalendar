@@ -8,7 +8,7 @@ import json
 from typing import List, Dict, Any, Optional
 
 class DcalClient:
-    def __init__(self, timeout: float = 4.0):
+    def __init__(self, timeout: float = 10.0):
         self.timeout = timeout
         self.last_error: Optional[str] = None
 
