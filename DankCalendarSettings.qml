@@ -98,6 +98,7 @@ PluginSettings {
             icon: "keyboard",
             items: [
                 { key: "j / k 或 ↓ / ↑", desc: "列表中平滑上下漫游高亮选中项" },
+                { key: "m", desc: "一键快速打开并加入选中日程的视频会议链接" },
                 { key: "Space (空格)", desc: "即刻切换选中待办的完成状态 (打勾 / 取消)" },
                 { key: "c", desc: "一键复制当前选中待办或日程的标题至剪贴板" },
                 { key: "d / Delete", desc: "快速删除当前选中的待办事项" },

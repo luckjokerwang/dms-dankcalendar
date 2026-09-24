@@ -327,6 +327,27 @@ Item {
         return "past";
     }
 
+    function getEventMeetingUrl(ev) {
+        if (!ev) return "";
+        var m = String(ev.meetingUrl || "").trim();
+        if (/^https?:\/\/[^\s/]+(?:[/?#][^\s]*)?$/i.test(m)) return m;
+
+        var loc = String(ev.location || "").trim();
+        var locMatch = loc.match(/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|voovmeeting\.com|meeting\.tencent\.com|webex\.com|feishu\.cn|dingtalk\.com)[^\s]*/i);
+        if (locMatch) return locMatch[0];
+
+        if (/^https?:\/\/[^\s/]+(?:[/?#][^\s]*)?$/i.test(loc)) return loc;
+
+        var desc = String(ev.description || "");
+        var descMatch = desc.match(/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|voovmeeting\.com|meeting\.tencent\.com|webex\.com|feishu\.cn|dingtalk\.com)[^\s<>"')]+/i);
+        if (descMatch) return descMatch[0];
+
+        var u = String(ev.url || "").trim();
+        if (/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com|voovmeeting\.com|meeting\.tencent\.com|webex\.com|feishu\.cn|dingtalk\.com)/i.test(u)) return u;
+
+        return "";
+    }
+
     function deleteEvent(ev) {
         if (!ev || !ev.id) return;
         if (ev.recurringId && ev.start) {

@@ -148,6 +148,20 @@ Item {
         }
     }
 
+    function joinCurrentMeeting() {
+        var model = activeStore ? activeStore.agendaModel : [];
+        if (agendaView.selectedIndex >= 0 && agendaView.selectedIndex < model.length) {
+            var item = model[agendaView.selectedIndex];
+            if (item && item.kind === "event" && item.ev && activeStore) {
+                var url = activeStore.getEventMeetingUrl(item.ev);
+                if (url) {
+                    Qt.openUrlExternally(url);
+                    agendaView.closeRequested();
+                }
+            }
+        }
+    }
+
     function openCurrentEvent() {
         var model = activeStore ? activeStore.agendaModel : [];
         if (agendaView.selectedIndex >= 0 && agendaView.selectedIndex < model.length) {
@@ -260,6 +274,11 @@ Item {
             event.accepted = true;
             return;
         }
+        if (event.key === Qt.Key_M) {
+            joinCurrentMeeting();
+            event.accepted = true;
+            return;
+        }
         if (event.key === Qt.Key_C || event.key === Qt.Key_Y) {
             copyCurrentEvent();
             event.accepted = true;
@@ -337,6 +356,7 @@ Item {
                     required property var modelData
                     required property int index
                     readonly property string phase: (modelData.kind === "event" && activeStore) ? activeStore.eventPhase(modelData.ev) : ""
+                    readonly property string meetingUrl: (modelData.kind === "event" && modelData.ev && activeStore) ? activeStore.getEventMeetingUrl(modelData.ev) : ""
 
                     width: eventColumn.width
                     height: modelData.kind === "event" ? 52 : (modelData.kind === "day" ? 32 : 28)
@@ -538,6 +558,49 @@ Item {
                                             wrapMode: TextEdit.NoWrap
                                             clip: true
                                             textFormat: TextEdit.PlainText
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Join Meeting Chip Button (Visible whenever meeting URL exists)
+                            Rectangle {
+                                id: joinMeetingBtn
+                                visible: !!agendaRow.meetingUrl
+                                Layout.alignment: Qt.AlignVCenter
+                                implicitWidth: joinRow.implicitWidth + 14
+                                implicitHeight: 24
+                                radius: 12
+                                color: joinMouse.containsMouse ? Theme.withAlpha(Theme.primary, 0.3) : Theme.withAlpha(Theme.primary, 0.16)
+                                border.width: 1
+                                border.color: Theme.withAlpha(Theme.primary, 0.45)
+
+                                RowLayout {
+                                    id: joinRow
+                                    anchors.centerIn: parent
+                                    spacing: 3
+                                    DankIcon {
+                                        name: "videocam"
+                                        size: 14
+                                        color: Theme.primary
+                                    }
+                                    StyledText {
+                                        text: "加入"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                        color: Theme.primary
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: joinMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (agendaRow.meetingUrl) {
+                                            Qt.openUrlExternally(agendaRow.meetingUrl);
+                                            agendaView.closeRequested();
                                         }
                                     }
                                 }

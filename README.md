@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.20-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.21-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -52,6 +52,7 @@
   - 将设置中的胶囊宽度定义为全局预算，标题区域自适应扣除右侧动态倒计时（如 `1h`, `14h15m`）的宽度；
   - **彻底消除尺寸抖动**：无论倒计时是长是短、无论切换日程还是待办，顶栏胶囊在屏幕上的**总像素宽度 100% 绝对恒定**！
 - **精准本地与 UTC 时区换算**：深度解决跨天与凌晨（00:00~08:00）事件的时区偏移问题，零漏查每一项早间日程。
+- **视频会议智能识别与一键「加入」按钮**：原生识别日程中的 Zoom、Google Meet、Teams、腾讯会议、飞书等在线会议链接，在议程卡片右侧常驻渲染精巧的「加入」芯片按钮，键盘流亦支持按 `m` 键一秒直达视频会议。
 - **多显示器状态实时同步**：基于 `PluginGlobalVar`，跨屏多监视器实时同步展开、切换与刷新状态。
 - **平滑跑马灯 (Marquee)**：长事件标题在受限视口中自动无缝往复平滑滚动。
 
@@ -104,6 +105,7 @@
 | **弹窗内 `1 / 2 / 3`** | 快速切换【日程】/【待办】/【助理】Tab 页面（亦支持 `Ctrl+1 / 2 / 3`） |
 | **弹窗内 `Ctrl + Tab / Ctrl + Shift + Tab`** | 顺时针 / 逆时针循环切换【日程】/【待办】/【助理】Tab 页面 |
 | **待办/日程 `j / k` 或 `↑ / ↓`** | 纯键盘列表上下漫游（高亮选中、视口平滑跟随，待办支持 `Space` 打勾、`c` 复制、`d` 删除、`i / a / Enter` 回顶打字） |
+| **日程内 点击「加入」/ 键盘 `m`** | 一键快速打开并加入当前日程关联的在线视频会议链接 |
 | **日程内 `t / Home`** | 视口平滑定位并选中【今天】即将发生的日程 |
 | **弹窗内 `Ctrl + N`** | 立即聚焦新建待办输入框并支持输入快捷键创建 |
 | **弹窗内 `Ctrl + R`** | 即刻同步刷新日历与待办数据 |
