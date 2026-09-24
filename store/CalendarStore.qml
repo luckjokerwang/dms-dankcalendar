@@ -19,6 +19,18 @@ Item {
     property int eventReminderMinutes: 5
     property var notifiedEventKeys: ({})
 
+    readonly property bool use24HourClock: (typeof SettingsData !== "undefined" && SettingsData) ? (SettingsData.use24HourClock ?? true) : true
+    readonly property bool padHours12Hour: (typeof SettingsData !== "undefined" && SettingsData) ? (SettingsData.padHours12Hour ?? false) : false
+
+    function formatTime(time) {
+        if (!time) return "";
+        var d = (time instanceof Date) ? time : new Date(time);
+        if (!store.use24HourClock) {
+            return store.padHours12Hour ? Qt.formatTime(d, "hh:mm AP") : Qt.formatTime(d, "h:mm AP");
+        }
+        return Qt.formatTime(d, "HH:mm");
+    }
+
     onAgendaPastDaysChanged: {
         store.agendaLoading = true;
         if (!fetchAgendaProc.running) fetchAgendaProc.running = true;
@@ -225,7 +237,7 @@ Item {
                 var timeStr = "";
                 try {
                     var d = eventDate(eventStart, eventAllDay);
-                    timeStr = (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+                    timeStr = store.formatTime(d);
                 } catch(e) {}
 
                 var bodyText = "将在 " + minsLeft + " 分钟后开始" + (timeStr ? (" (" + timeStr + ")") : "");
@@ -299,9 +311,9 @@ Item {
     function eventTimeLabel(ev) {
         if (ev.allDay) return "All day";
         var s = eventDate(ev.start, false);
-        var label = Qt.formatTime(s, "HH:mm");
+        var label = store.formatTime(s);
         if (ev.end) {
-            label += "–" + Qt.formatTime(eventDate(ev.end, false), "HH:mm");
+            label += "–" + store.formatTime(eventDate(ev.end, false));
         }
         return label;
     }

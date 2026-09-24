@@ -16,6 +16,18 @@ Item {
     signal closeRequested()
     signal switchToModule(string moduleName)
 
+    readonly property bool use24HourClock: (typeof SettingsData !== "undefined" && SettingsData) ? (SettingsData.use24HourClock ?? true) : true
+    readonly property bool padHours12Hour: (typeof SettingsData !== "undefined" && SettingsData) ? (SettingsData.padHours12Hour ?? false) : false
+
+    function formatTime(d) {
+        if (!d) return "";
+        var dateObj = (d instanceof Date) ? d : new Date(d);
+        if (!tasksView.use24HourClock) {
+            return tasksView.padHours12Hour ? Qt.formatTime(dateObj, "hh:mm AP") : Qt.formatTime(dateObj, "h:mm AP");
+        }
+        return Qt.formatTime(dateObj, "HH:mm");
+    }
+
     function copyToClipboard(txt) {
         if (!txt) return;
         Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy 2>/dev/null || printf '%s' \"$1\" | xclip -selection clipboard 2>/dev/null", "sh", txt]);
@@ -376,7 +388,7 @@ Item {
 
             var timePart = "";
             if (!isAllDay) {
-                timePart = " " + Qt.formatTime(d, "HH:mm");
+                timePart = " " + tasksView.formatTime(d);
             } else if (summary) {
                 var tm = summary.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
                 if (tm) {

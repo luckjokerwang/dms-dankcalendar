@@ -297,10 +297,10 @@ PluginComponent {
                             var s = calendarStoreItem.eventDate(calendarStoreItem.eventStart, calendarStoreItem.eventAllDay);
                             var day = calendarStoreItem.formatLocalDate(s, "dddd, d MMMM");
                             if (calendarStoreItem.eventAllDay) return day + " · All day";
-                            var timeStr = Qt.formatTime(s, "HH:mm");
+                            var timeStr = calendarStoreItem.formatTime(s);
                             if (calendarStoreItem.eventEnd) {
                                 var e = calendarStoreItem.eventDate(calendarStoreItem.eventEnd, false);
-                                timeStr += "–" + Qt.formatTime(e, "HH:mm");
+                                timeStr += "–" + calendarStoreItem.formatTime(e);
                             }
                             return day + " · " + timeStr;
                         }
