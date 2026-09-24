@@ -19,9 +19,19 @@ PluginComponent {
     DankCalendarConstants { id: constantsItem }
     readonly property DankCalendarConstants constants: constantsItem
 
+    // Notification Manager
+    NotificationManager {
+        id: notificationManagerItem
+        notificationMode: pluginData.notificationMode || "both"
+    }
+    readonly property alias notificationManager: notificationManagerItem
+
     // State Stores
     CalendarStore {
         id: calendarStoreItem
+        notificationManager: notificationManagerItem
+        eventReminderEnabled: pluginData.eventReminderEnabled ?? true
+        eventReminderMinutes: pluginData.eventReminderMinutes ?? 5
         refreshInterval: (pluginData.refreshInterval || 30) * 1000
         lookAheadDays: pluginData.lookAheadDays || 1
         nowWindowMinutes: pluginData.nowWindowMinutes ?? 5
@@ -31,6 +41,8 @@ PluginComponent {
 
     TaskStore {
         id: taskStoreItem
+        notificationManager: notificationManagerItem
+        taskOverdueReminderEnabled: pluginData.taskOverdueReminderEnabled ?? true
     }
 
     ProviderStore {
@@ -39,6 +51,7 @@ PluginComponent {
 
     AiStore {
         id: aiStoreItem
+        notificationManager: notificationManagerItem
         aiNotificationEnabled: pluginData.aiNotificationEnabled ?? true
         onProposalConfirmed: {
             calendarStoreItem.refreshAll();
@@ -451,13 +464,18 @@ PluginComponent {
             }
         }
 
-        // 3. Settings & Data Refresh
+        // 3. Settings & Data Refresh & Notifications
         function openSettings() {
             root.openPluginSettingsWindow();
         }
 
         function refresh() {
             root.refreshAll();
+        }
+
+        function testNotification() {
+            notificationManagerItem.sendTestNotification();
+            return "NOTIFICATION_TEST_SENT";
         }
     }
 
@@ -695,6 +713,7 @@ PluginComponent {
                         sessionScriptPath: root.sessionScriptPath
                         pasteHelperPath: root.pasteHelperPath
                         providerScriptPath: root.providerScriptPath
+                        notificationManager: root.notificationManager
                         aiNotificationEnabled: pluginData.aiNotificationEnabled ?? true
                         width: chatViewLoader.width
                         height: root.constants ? root.constants.defaultContentHeight : 420

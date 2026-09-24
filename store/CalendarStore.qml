@@ -14,6 +14,10 @@ Item {
     property int nowWindowMinutes: constants.defaultNowWindowMinutes
     property int agendaPastDays: constants.defaultAgendaPastDays
     property int agendaFutureDays: constants.defaultAgendaFutureDays
+    property var notificationManager: null
+    property bool eventReminderEnabled: true
+    property int eventReminderMinutes: 5
+    property var notifiedEventKeys: ({})
 
     onAgendaPastDaysChanged: {
         store.agendaLoading = true;
@@ -76,7 +80,10 @@ Item {
         interval: 1000
         running: true
         repeat: true
-        onTriggered: store.countdownNow = Date.now()
+        onTriggered: {
+            store.countdownNow = Date.now();
+            store.checkUpcomingEventReminder();
+        }
     }
 
     Timer {
@@ -201,6 +208,37 @@ Item {
         eventDescription = payload.description || "";
         eventMeetingUrl = payload.meetingUrl || "";
         eventUrl = payload.url || "";
+        store.checkUpcomingEventReminder();
+    }
+
+    function checkUpcomingEventReminder() {
+        if (!eventReminderEnabled || !notificationManager || !hasEvent || !eventStart) return;
+        var thresholdMs = (eventReminderMinutes || 5) * 60000;
+        if (remainingMs > 0 && remainingMs <= thresholdMs) {
+            var evKey = (eventStart || "") + "_" + (eventSummary || "");
+            if (!notifiedEventKeys[evKey]) {
+                var newKeys = Object.assign({}, notifiedEventKeys);
+                newKeys[evKey] = true;
+                notifiedEventKeys = newKeys;
+
+                var minsLeft = Math.max(1, Math.round(remainingMs / 60000));
+                var timeStr = "";
+                try {
+                    var d = eventDate(eventStart, eventAllDay);
+                    timeStr = (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+                } catch(e) {}
+
+                var bodyText = "将在 " + minsLeft + " 分钟后开始" + (timeStr ? (" (" + timeStr + ")") : "");
+                if (eventLocation) bodyText += "\n地点: " + eventLocation;
+
+                notificationManager.notify(
+                    "📅 日程即将开始: " + (eventCleanSummary || eventSummary),
+                    bodyText,
+                    "com.danklinux.dankcalendar",
+                    "info"
+                );
+            }
+        }
     }
 
     function eventDate(iso, allDay) {

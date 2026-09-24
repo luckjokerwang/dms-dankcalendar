@@ -3,7 +3,7 @@
 <div align="center">
 
 [![DMS Plugin](https://img.shields.io/badge/DMS-Plugin-blue.svg)](https://github.com/AvengeMedia/DankMaterialShell)
-[![Version](https://img.shields.io/badge/Version-v3.3.18-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
+[![Version](https://img.shields.io/badge/Version-v3.3.19-brightgreen.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-orange.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Wayland-purple.svg)](https://github.com/luckjokerwang/dms-dankcalendar)
 
@@ -76,6 +76,17 @@
 - **模型服务配置**：支持在图形设置界面中完成模型测试、激活切换与参数调整。
 - **全功能快捷键速查表与 Wayland 合成器配置**：设置页面内嵌卡片化操作速查指南 (Cheat Sheet Dashboard)，支持一键折叠展开，支持 Niri / Hyprland 全局快捷键一键复制与设置即刻唤起。
 
+### 🔔 5. 系统原生通知体系与通知模式偏好 (System Notifications & Preferences)
+- **全面接入系统桌面通知 (Freedesktop Notifications)**：通过 `dms notify` 与 `notify-send` 深度集成 Linux 原生通知守护进程，所有预警与状态自动沉淀至 DMS 侧边通知中心（Notification Center）中，历史永久留存防遗忘。
+- **4 种通知模式偏好自由切换**：
+  - **双轨通知（默认）**：兼顾屏幕前台 DMS Toast 悬浮胶囊即时滑出与原生通知中心历史留存；
+  - **仅系统原生桌面通知**：无悬浮打扰，直接静默写入通知中心；
+  - **仅 DMS Toast 悬浮胶囊**：保持轻量前台即时提示；
+  - **完全关闭通知**：适合免打扰或游戏场景。
+- **日程临期预警通知**：支持自定义提前分钟数（1~30 分钟），在日程即将开始前自动弹出桌面通知，包含开始倒计时、具体时间与地点，并提供智能去重机制。
+- **待办到期自动通知**：待办到达截止时间自动汇总提醒，避免遗忘重要 Deadline。
+- **一键测试连通性**：在设置页面内嵌“发送测试通知”卡片，并开放 `dms ipc call dankCalendarPlus testNotification` IPC 接口，支持随时检验通知连通性。
+
 ---
 
 ## 🕹️ 快捷操作指引 (Quick Actions & Shortcuts)
@@ -87,6 +98,7 @@
 | **中键点击顶栏胶囊** | 快速调出 DankCalendar 主应用程序窗口 |
 | **右键点击胶囊 / 点击 ↻** | 触发底层账户全量同步（`dcal ipc accounts.refresh`），带 360° GPU 加速旋转动效 |
 | **弹窗 ⚙️ 按钮 / IPC openSettings** | 打开插件设置并直达快捷键速查仪表盘（`dms ipc call dankCalendarPlus openSettings`） |
+| **IPC testNotification** | 发送一条当前通知模式的测试通知（`dms ipc call dankCalendarPlus testNotification`） |
 | **弹窗 `+` 按钮** | 在 DankCalendar 中打开新建事件界面 |
 | **待办输入框回车** | 快速创建待办（支持输入 `!1` 设为高优，当前分类下自动继承标签） |
 | **弹窗内 `1 / 2 / 3`** | 快速切换【日程】/【待办】/【助理】Tab 页面（亦支持 `Ctrl+1 / 2 / 3`） |

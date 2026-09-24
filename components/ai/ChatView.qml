@@ -62,6 +62,7 @@ StyledRect {
 
     // Dynamic Providers & Models from ~/.config/dms-ai/providers.json
     property bool aiNotificationEnabled: true
+    property var notificationManager: null
     property var configuredProviders: []
     property string activeProviderId: "agnes"
 
@@ -71,6 +72,12 @@ StyledRect {
         var b = (body || "").trim()
         if (!s) return
         var ic = icon || "dialog-information"
+        var t = (ic === "dialog-error" ? "error" : (ic === "dialog-warning" ? "warning" : "info"))
+
+        if (root.notificationManager && typeof root.notificationManager.notify === "function") {
+            root.notificationManager.notify(s, b, ic, t)
+            return
+        }
 
         // 1. DMS 原生高亮悬浮 Toast 弹窗（屏幕中央/前台百分之百弹出，无视图层过滤与勿扰阻断）
         if (typeof ToastService !== "undefined" && ToastService) {
@@ -115,7 +122,7 @@ StyledRect {
             }
 
             var body = "已规划 " + parts.join("、") + (sample ? ("：包含「" + sample + "」等") : "")
-            sendNotification("📅 排程建议已就绪", body, "dialog-information")
+            sendNotification("📅 排程建议已就绪", body, "com.danklinux.dankcalendar")
         } else {
             var raw = (text || "").trim()
             var clean = raw.replace(/```[\s\S]*?```/g, "")
@@ -126,7 +133,7 @@ StyledRect {
                 clean = clean.slice(0, 80) + "..."
             }
             if (!clean) clean = "回复已生成，点击查看详情"
-            sendNotification("🤖 AI 助手已回复", clean, "dialog-information")
+            sendNotification("🤖 AI 助手已回复", clean, "com.danklinux.dankcalendar")
         }
     }
 
@@ -1278,7 +1285,7 @@ StyledRect {
                                 var evCount = (updatedProposal && updatedProposal.events && Array.isArray(updatedProposal.events)) ? updatedProposal.events.length : 0
                                 var taskCount = (updatedProposal && updatedProposal.tasks && Array.isArray(updatedProposal.tasks)) ? updatedProposal.tasks.length : 0
                                 var detail = "已写入 " + (evCount > 0 ? (evCount + " 项日程") : "") + (evCount > 0 && taskCount > 0 ? "、" : "") + (taskCount > 0 ? (taskCount + " 项待办") : "")
-                                root.sendNotification("✅ 排程已写入清单", detail, "emblem-default")
+                                root.sendNotification("✅ 排程已写入清单", detail, "com.danklinux.dankcalendar")
                             }
                         }
                     }

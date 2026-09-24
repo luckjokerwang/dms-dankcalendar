@@ -912,13 +912,6 @@ PluginSettings {
         defaultValue: true
     }
 
-    ToggleSetting {
-        settingKey: "aiNotificationEnabled"
-        label: "AI 助理回复与报错桌面通知"
-        description: "AI 思考回复完毕、生成排程建议或遇到请求错误时，在桌面顶部弹出动态通知提醒（便于后台等待）"
-        defaultValue: true
-    }
-
     SliderSetting {
         settingKey: "pillMaxWidth"
         label: "顶栏胶囊最大宽度"
@@ -969,9 +962,156 @@ PluginSettings {
         unit: "d"
     }
 
+    // ==========================================
+    // 3. 🔔 桌面通知与事件提醒偏好 (Freedesktop / dms notify)
+    // ==========================================
+    StyledText {
+        text: "🔔 系统原生通知与事件提醒偏好"
+        font.pixelSize: Theme.fontSizeMedium
+        font.weight: Font.Bold
+        color: Theme.surfaceText
+    }
+
+    StyledText {
+        text: "支持接入 Linux 原生桌面通知体系 (dms notify / org.freedesktop.Notifications)，兼顾即时弹出与通知中心历史留存"
+        font.pixelSize: Theme.fontSizeSmall
+        color: Theme.surfaceVariantText
+    }
+
+    SelectionSetting {
+        settingKey: "notificationMode"
+        label: "通知模式偏好"
+        description: "选择插件消息提醒的分发方式（双轨通知兼顾屏幕前台即时高亮与通知中心历史留存）"
+        defaultValue: "both"
+        options: [
+            { value: "both", label: "双轨通知 (桌面通知 + Toast 胶囊)" },
+            { value: "native", label: "仅系统原生桌面通知" },
+            { value: "toast", label: "仅 DMS Toast 悬浮胶囊" },
+            { value: "none", label: "完全关闭通知" }
+        ]
+    }
+
+    ToggleSetting {
+        settingKey: "eventReminderEnabled"
+        label: "日程即将开始提前通知"
+        description: "在下一个日程开始前发送桌面通知，避免错过重要会议与日程"
+        defaultValue: true
+    }
+
+    SliderSetting {
+        settingKey: "eventReminderMinutes"
+        label: "日程提前提醒时长"
+        description: "日程开始前多少分钟触发桌面提醒"
+        defaultValue: 5
+        minimum: 1
+        maximum: 30
+        unit: "m"
+    }
+
+    ToggleSetting {
+        settingKey: "taskOverdueReminderEnabled"
+        label: "待办到期通知提醒"
+        description: "当待办事项到达设定到期时间或临期时，在桌面弹出通知提醒"
+        defaultValue: true
+    }
+
+    ToggleSetting {
+        settingKey: "aiNotificationEnabled"
+        label: "AI 助理回复与报错通知"
+        description: "AI 思考回复完毕、生成排程建议或遇到请求错误时发送桌面通知提醒（便于后台等待）"
+        defaultValue: true
+    }
+
+    // 发送测试通知卡片
+    Rectangle {
+        width: parent.width
+        implicitHeight: testNotifyRow.implicitHeight + Theme.spacingM * 2
+        radius: Theme.cornerRadius
+        color: Theme.surfaceContainerLowest
+        border.width: 1
+        border.color: Theme.outlineVariant
+
+        RowLayout {
+            id: testNotifyRow
+            width: parent.width - Theme.spacingM * 2
+            x: Theme.spacingM
+            y: Theme.spacingM
+            spacing: Theme.spacingM
+
+            Rectangle {
+                implicitWidth: 32
+                implicitHeight: 32
+                radius: 8
+                color: Theme.withAlpha(Theme.primary, 0.12)
+                Image {
+                    id: dcalAppIcon
+                    anchors.centerIn: parent
+                    width: 20
+                    height: 20
+                    source: "file:///usr/share/icons/hicolor/scalable/apps/com.danklinux.dankcalendar.svg"
+                    sourceSize.width: 20
+                    sourceSize.height: 20
+                    visible: status === Image.Ready
+                }
+                DankIcon {
+                    anchors.centerIn: parent
+                    name: "notifications_active"
+                    size: 18
+                    color: Theme.primary
+                    visible: !dcalAppIcon.visible
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                StyledText {
+                    text: "测试通知连通性"
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.weight: Font.Bold
+                    color: Theme.surfaceText
+                }
+                StyledText {
+                    text: "按当前设置的通知模式立即触发一条测试通知，检验桌面通知中心与 Toast 气泡"
+                    font.pixelSize: 11
+                    color: Theme.surfaceVariantText
+                }
+            }
+
+            Rectangle {
+                implicitWidth: testBtnText.implicitWidth + 24
+                implicitHeight: 30
+                radius: 15
+                color: testBtnMouse.containsMouse ? Theme.primaryHover : Theme.primary
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 4
+                    DankIcon { name: "send"; size: 14; color: "#ffffff" }
+                    StyledText {
+                        id: testBtnText
+                        text: "发送测试通知"
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        color: "#ffffff"
+                    }
+                }
+
+                MouseArea {
+                    id: testBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        Quickshell.execDetached(["dms", "ipc", "call", "dankCalendarPlus", "testNotification"]);
+                    }
+                }
+            }
+        }
+    }
 
     // ==========================================
-    // 3. 🏷️ 常用分类标签库管理 (SQLite)
+    // 4. 🏷️ 常用分类标签库管理 (SQLite)
     // ==========================================
     StyledText {
         text: "🏷️ 常用分类标签管理"
@@ -1102,6 +1242,9 @@ PluginSettings {
     }
 
 
+    // ==========================================
+    // 5. 🤖 AI 大模型服务商与模型管理中心
+    // ==========================================
     Rectangle {
         width: parent.width
         implicitHeight: root.aiSectionExpanded ? (providerCol.implicitHeight + Theme.spacingM * 2) : (aiHeaderRow.implicitHeight + Theme.spacingM * 2)

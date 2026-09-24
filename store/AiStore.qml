@@ -20,6 +20,7 @@ Item {
     property string streamingAssistantText: ""
     property var currentProposal: null
     property bool aiNotificationEnabled: true
+    property var notificationManager: null
 
     signal generationFinished()
     signal proposalConfirmed(var result)
@@ -30,7 +31,16 @@ Item {
         var s = (summary || "").trim();
         var b = (body || "").trim();
         if (!s) return;
-        var ic = icon || "dialog-information";
+        var ic = icon;
+        if (!ic || ic === "dialog-information" || ic === "calendar") {
+            ic = "com.danklinux.dankcalendar";
+        }
+        var t = (ic === "dialog-error" ? "error" : (ic === "dialog-warning" ? "warning" : "info"));
+
+        if (store.notificationManager && typeof store.notificationManager.notify === "function") {
+            store.notificationManager.notify(s, b, ic, t);
+            return;
+        }
 
         // 1. DMS 原生高亮悬浮 Toast 弹窗（屏幕前台 100% 弹出，不受通知过滤器抑制）
         if (typeof ToastService !== "undefined" && ToastService) {
@@ -47,10 +57,14 @@ Item {
         // 2. 传统 Freedesktop DBus 通知（写入系统通知中心历史留存）
         var cmd = [
             "sh", "-c",
+            'ICON="$3"; ' +
+            'if [ "$ICON" = "com.danklinux.dankcalendar" ] && [ -f "/usr/share/icons/hicolor/scalable/apps/com.danklinux.dankcalendar.svg" ]; then ' +
+            '  ICON="/usr/share/icons/hicolor/scalable/apps/com.danklinux.dankcalendar.svg"; ' +
+            'fi; ' +
             'if command -v dms >/dev/null 2>&1; then ' +
-            '  dms notify "$1" "$2" --app "Dank Calendar Plus" --icon "$3"; ' +
+            '  dms notify "$1" "$2" --app "Dank Calendar" --icon "$ICON"; ' +
             'elif command -v notify-send >/dev/null 2>&1; then ' +
-            '  notify-send -a "Dank Calendar Plus" -i "$3" "$1" "$2"; ' +
+            '  notify-send -a "Dank Calendar" -i "$ICON" "$1" "$2"; ' +
             'fi',
             "sh", s, b, ic
         ];

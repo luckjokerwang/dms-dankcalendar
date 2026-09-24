@@ -24,6 +24,9 @@ Item {
     property bool tasksLoading: false
     property bool isClassifyingBatch: false
     property int refreshInterval: 10000
+    property var notificationManager: null
+    property bool taskOverdueReminderEnabled: true
+    property var notifiedTaskMap: ({})
 
     // Multi-Monitor / Cross-Process Synchronization via PluginGlobalVar
     PluginGlobalVar {
@@ -76,6 +79,7 @@ Item {
                     console.warn("[TaskStore] parse error:", e);
                 }
                 store.tasksLoading = false;
+                store.checkTaskOverdueReminders();
             }
         }
         onExited: (code) => {
@@ -97,9 +101,53 @@ Item {
         }
     }
 
+    function checkTaskOverdueReminders() {
+        if (!taskOverdueReminderEnabled || !notificationManager || !pendingTasks || pendingTasks.length === 0) return;
+        var now = Date.now();
+        var overdueTasks = [];
+        for (var i = 0; i < pendingTasks.length; i++) {
+            var t = pendingTasks[i];
+            if (!t.due) continue;
+            try {
+                var dueTime = new Date(t.due).getTime();
+                if (dueTime <= now) {
+                    var taskKey = t.id + "_" + (t.due || "");
+                    if (!notifiedTaskMap[taskKey]) {
+                        overdueTasks.push(t);
+                        var newMap = Object.assign({}, notifiedTaskMap);
+                        newMap[taskKey] = true;
+                        notifiedTaskMap = newMap;
+                    }
+                }
+            } catch(e) {}
+        }
+        if (overdueTasks.length > 0) {
+            if (overdueTasks.length === 1) {
+                notificationManager.notify(
+                    "⏰ 待办到期提醒",
+                    "待办「" + (overdueTasks[0].cleanSummary || overdueTasks[0].summary) + "」已到期，请及时处理",
+                    "com.danklinux.dankcalendar",
+                    "warning"
+                );
+            } else {
+                notificationManager.notify(
+                    "⏰ 待办到期提醒",
+                    "您有 " + overdueTasks.length + " 项待办已到期，请及时查看处理",
+                    "com.danklinux.dankcalendar",
+                    "warning"
+                );
+            }
+        }
+    }
+
     function showToast(type, message) {
         if (!message) return;
         try {
+            if (store.notificationManager && typeof store.notificationManager.notify === "function") {
+                var ic = (type === "error" ? "dialog-error" : (type === "warning" ? "dialog-warning" : "com.danklinux.dankcalendar"));
+                store.notificationManager.notify("Dank Calendar 待办", message, ic, type);
+                return;
+            }
             if (typeof ToastService !== "undefined") {
                 if (type === "error" && typeof ToastService.showError === "function") {
                     ToastService.showError(message);
